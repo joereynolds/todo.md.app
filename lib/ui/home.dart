@@ -5,6 +5,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/actions.dart';
 import '../core/day.dart';
@@ -295,6 +296,52 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   void _state(List<Task> tasks, TaskState s) => _done(actions.setState(tasks, s), stateLabels[s]!);
 
+  /// Share the selected tasks' text as a bullet list: to another app through
+  /// the system share sheet, or onto the clipboard.
+  Future<void> _share(List<Task> tasks) async {
+    if (tasks.isEmpty) return;
+    final n = tasks.length;
+    final copy = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+              child: Text('Share $n task${n == 1 ? '' : 's'} as a list', style: Theme.of(sheet).textTheme.titleMedium),
+            ),
+            if (canShare)
+              ListTile(
+                key: const Key('share-app'),
+                leading: const Icon(Icons.share_outlined),
+                title: const Text('Send to an app'),
+                subtitle: const Text('WhatsApp, email, notes …'),
+                onTap: () => Navigator.pop(sheet, false),
+              ),
+            ListTile(
+              key: const Key('share-copy'),
+              leading: const Icon(Icons.copy),
+              title: const Text('Copy as text'),
+              onTap: () => Navigator.pop(sheet, true),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (copy == null) return;
+    final text = bulletList(tasks);
+    if (copy) {
+      await Clipboard.setData(ClipboardData(text: text));
+      _snack('Copied $n task${n == 1 ? '' : 's'}');
+    } else {
+      await shareText(text);
+    }
+    if (mounted) setState(() => selected = {});
+  }
+
   Future<void> _due(List<Task> tasks) async {
     if (tasks.isEmpty) return;
     final choice = await pickDue(context, initial: tasks.first.due, count: expand(tasks).length);
@@ -528,6 +575,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       title: Text('${selected.length} selected'),
       actions: [
         IconButton(tooltip: 'Select all', icon: const Icon(Icons.select_all), onPressed: _selectAll),
+        IconButton(tooltip: 'Share', icon: const Icon(Icons.share_outlined), onPressed: () => _share(tasks)),
         IconButton(tooltip: 'Delete', icon: const Icon(Icons.delete_outline), onPressed: () => _delete(tasks)),
         PopupMenuButton<String>(
           onSelected: (v) {

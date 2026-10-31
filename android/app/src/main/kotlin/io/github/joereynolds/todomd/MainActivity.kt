@@ -41,6 +41,13 @@ class MainActivity : FlutterActivity() {
                     startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), pickFolder)
                 }
                 "externalRoot" -> result.success(Environment.getExternalStorageDirectory().absolutePath)
+                "shareText" -> {
+                    val send = Intent(Intent.ACTION_SEND)
+                        .setType("text/plain")
+                        .putExtra(Intent.EXTRA_TEXT, call.argument<String>("text"))
+                    startActivity(Intent.createChooser(send, null))
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }

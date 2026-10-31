@@ -35,6 +35,24 @@ List<Task> expand(Iterable<Task> tasks, {bool withSubtasks = true}) {
   return out;
 }
 
+/// The tasks as a markdown bullet list of their text only (no checkbox,
+/// dates, ETA or tags), in visual order, for pasting elsewhere. Only the given
+/// tasks, not their subtasks; a task is indented under the selected tasks
+/// above it in the tree.
+String bulletList(Iterable<Task> tasks) {
+  final picked = expand(tasks, withSubtasks: false);
+  final set = picked.toSet();
+  final b = StringBuffer();
+  for (final t in picked) {
+    var level = 0;
+    for (var p = t.parent; p != null; p = p.parent) {
+      if (set.contains(p)) level++;
+    }
+    b.writeln('${'  ' * level}- ${t.text}');
+  }
+  return b.toString();
+}
+
 Task lastDescendant(Task t) {
   while (t.children.isNotEmpty) {
     t = t.children.last;

@@ -107,6 +107,14 @@ search box is debounced 150 ms.
   to Tasks). Also tappable in the task sheet. The `#` Tags chip in the filter bar
   lists every tag with its open-task count (`TaskStore.tags()`).
 
+## Share / copy as list (added here first: port to the desktop)
+
+Selection bar → share icon → "Send to an app" (Android share sheet, `shareText` over
+the `todomd/storage` channel) or "Copy as text". Either way the text is the selected
+tasks (not their subtasks) as `- text` lines,
+text only (no checkbox, dates, ETA, tags), in visual order, indented under selected
+ancestors (`actions.bulletList`). Clears the selection.
+
 ## Not done yet
 
 - iOS release builds; folders outside the app sandbox on iOS (security-scoped bookmarks).

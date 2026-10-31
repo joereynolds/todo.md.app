@@ -65,6 +65,12 @@ Future<String> storageRoot() async {
 Future<String> appNotesDir() async => (await getApplicationDocumentsDirectory()).path;
 
 bool get hasFolderPicker => Platform.isAndroid;
+
+/// Whether [shareText] can hand text to other apps here.
+bool get canShare => Platform.isAndroid;
+
+/// Opens the system share sheet (WhatsApp, email, notes …) with [text].
+Future<void> shareText(String text) => _storage.invokeMethod<void>('shareText', {'text': text});
 bool get canUseAnyFolder => !Platform.isIOS;
 
 /// Opens the file in whatever app handles markdown (Markor, Obsidian, an

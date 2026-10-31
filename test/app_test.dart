@@ -3,6 +3,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:todomd/core/day.dart';
@@ -260,6 +261,25 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('pill-office')));
     await tester.pumpAndSettle();
     expect(home.search.text, '#office');
+  });
+
+  testWidgets('share → copy: selected tasks as a bullet list of their text', (tester) async {
+    String? copied;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') copied = (call.arguments as Map)['text'] as String;
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    final home = await boot(tester, data: '- [ ] a !2026-11-01 #x\n- [ ] b ~5m\n  - [ ] b1\n  - [ ] b2\n- [ ] c\n');
+    home.selected = {for (final t in store.files.first.tasks) if (t.text != 'b2' && t.text != 'a') keyOf(t)};
+    home.setFilter(''); // rebuild
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Share'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('share-copy')));
+    await tester.pumpAndSettle();
+    expect(copied, '- b\n  - b1\n- c\n');
+    expect(home.selected, isEmpty);
   });
 
   testWidgets('calendar: day list, tile filters, reveal in Tasks', (tester) async {
