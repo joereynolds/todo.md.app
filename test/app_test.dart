@@ -282,6 +282,54 @@ void main() {
     expect(home.selected, isEmpty);
   });
 
+  testWidgets('typing # suggests existing tags; tapping one completes it', (tester) async {
+    await boot(tester, data: '- [ ] a #office\n- [ ] b #home #offsite\n');
+    await tester.tap(find.byTooltip('Add task'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('tagSuggestions')), findsNothing);
+    await tester.enterText(find.byKey(const Key('addText')), 'call bob #of');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('pill-office')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pill-offsite')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pill-home')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('pill-office')));
+    await tester.pumpAndSettle();
+    final field = tester.widget<TextField>(find.byKey(const Key('addText')));
+    expect(field.controller!.text, 'call bob #office ');
+    expect(find.byKey(const Key('tagSuggestions')), findsNothing);
+  });
+
+  testWidgets('task sheet: add a tag (picker) and remove one; sheet stays open', (tester) async {
+    await boot(tester, data: '- [ ] call #mum, then\n- [ ] b #home\n');
+    await tester.tap(rowText('call then'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('addTag')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pill-home'))); // an existing tag
+    await tester.pumpAndSettle();
+    expect(contents(), '- [ ] call #mum, then #home\n- [ ] b #home\n');
+    expect(find.byKey(const Key('sheetText')), findsOneWidget); // still open
+    expect(find.byKey(const ValueKey('untag-home')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('untag-mum')));
+    await tester.pumpAndSettle();
+    expect(contents(), '- [ ] call, then #home\n- [ ] b #home\n');
+    final field = tester.widget<TextField>(find.byKey(const Key('sheetText')));
+    expect(field.controller!.text, 'call, then #home'); // follows the file
+
+    // A new tag, typed.
+    await tester.tap(find.byKey(const Key('addTag')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('tagText')), '#work/admin');
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tagAdd')));
+    await tester.pumpAndSettle();
+    expect(contents(), '- [ ] call, then #home #work/admin\n- [ ] b #home\n');
+    store.undo();
+    await tester.pumpAndSettle();
+    expect(contents(), '- [ ] call, then #home\n- [ ] b #home\n');
+  });
+
   testWidgets('calendar: day list, tile filters, reveal in Tasks', (tester) async {
     final home = await boot(tester, data: '- [ ] late !2026-10-30\n- [ ] now !2026-10-31\n- [/] doing\n');
     await tester.tap(find.text('Calendar'));

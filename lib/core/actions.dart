@@ -130,6 +130,17 @@ class TaskActions {
     return _run([_line(t, parser.setContent(t.raw, content))], 'Edit');
   }
 
+  /// Tags belong to one task, so these don't touch subtasks.
+  int addTag(Task t, String tag) {
+    final line = parser.addTag(t.raw, tag);
+    return line == t.raw ? 0 : _run([_line(t, line)], 'Add #$tag');
+  }
+
+  int removeTag(Task t, String tag) {
+    final line = parser.removeTag(t.raw, tag);
+    return line == t.raw ? 0 : _run([_line(t, line)], 'Remove #$tag');
+  }
+
   int replace(Iterable<Task> selected, String Function(String content) fn) {
     final edits = <Edit>[];
     for (final t in expand(selected)) {

@@ -251,6 +251,18 @@ void main() {
     expect(tagTerm('Office'), '#office');
   });
 
+  test('add and remove tags', () {
+    expect(parser.removeTag('- [ ] Call #mum, then #Mum again', 'mum'), '- [ ] Call, then again');
+    expect(parser.removeTag('- [ ] #home sort', 'home'), '- [ ] sort');
+    expect(parser.removeTag('- [ ] a #x ~5m', 'x'), '- [ ] a ~5m');
+    expect(parser.removeTag('- [ ] a #xy', 'x'), '- [ ] a #xy');
+    expect(parser.addTag('- [ ] a #x', 'X'), '- [ ] a #x'); // already there
+    expect(parser.addTag('- [ ] a', 'new/one'), '- [ ] a #new/one');
+    expect(parser.addTag('- [ ] a ', 'b'), '- [ ] a #b');
+    expect(parser.addTag('- [ ] a', 'bad tag'), '- [ ] a'); // not a tag
+    expect(parser.addTag('- [ ] a', '42'), '- [ ] a');
+  });
+
   test('addMonths clamps', () {
     expect(isoDay(addMonths(dayOf(2026, 1, 31), 1)), '2026-02-28');
     expect(isoDay(addMonths(dayOf(2026, 1, 15), -1)), '2025-12-15');

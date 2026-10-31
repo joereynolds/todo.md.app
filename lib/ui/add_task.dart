@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../core/day.dart';
 import 'calendar.dart';
+import 'tags.dart';
 import 'theme.dart';
 
 /// Small bordered toggle; the app's own, not a Material chip.
@@ -120,17 +121,24 @@ typedef NewTask = ({String text, Day? due});
 
 /// Returns null if cancelled. [context] says where it goes ("todo.md",
 /// "under …").
-Future<NewTask?> showAddTask(BuildContext context, {required String title, required String where, Day? due}) {
+Future<NewTask?> showAddTask(
+  BuildContext context, {
+  required String title,
+  required String where,
+  Day? due,
+  List<String> tags = const [],
+}) {
   return showModalBottomSheet<NewTask>(
     context: context,
     isScrollControlled: true,
-    builder: (_) => _AddTaskSheet(title: title, where: where, due: due),
+    builder: (_) => _AddTaskSheet(title: title, where: where, due: due, tags: tags),
   );
 }
 
 class _AddTaskSheet extends StatefulWidget {
-  const _AddTaskSheet({required this.title, required this.where, this.due});
+  const _AddTaskSheet({required this.title, required this.where, this.due, this.tags = const []});
   final String title, where;
+  final List<String> tags;
   final Day? due;
 
   @override
@@ -188,9 +196,10 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
                 autofocus: true,
                 textCapitalization: TextCapitalization.sentences,
                 textInputAction: TextInputAction.done,
-                decoration: const InputDecoration(hintText: 'What needs doing?  (~15m for an ETA)'),
+                decoration: const InputDecoration(hintText: 'What needs doing?  (~15m, #tag)'),
                 onSubmitted: (_) => _submit(),
               ),
+              TagSuggestions(controller: _text, tags: widget.tags),
               const SizedBox(height: 14),
               Text('Due', style: TextStyle(color: colors.dim, fontSize: 12.5)),
               const SizedBox(height: 6),

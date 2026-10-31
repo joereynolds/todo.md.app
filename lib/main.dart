@@ -41,7 +41,10 @@ class TodoApp extends StatelessWidget {
           // the system font size.
           builder: (context, child) {
             final mq = MediaQuery.of(context);
-            return MediaQuery(data: mq.copyWith(textScaler: _Scaled(mq.textScaler, 0.93)), child: child!);
+            return MediaQuery(
+              data: mq.copyWith(textScaler: _Scaled(mq.textScaler, 0.93)),
+              child: child!,
+            );
           },
         );
       },

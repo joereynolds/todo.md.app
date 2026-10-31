@@ -1,37 +1,78 @@
 // Tapping a task opens this sheet: edit the text, set the state, due date,
-// ETA, add a task or subtask, open the file, delete. Actions on a parent
-// include its subtasks, as everywhere else.
+// ETA, tags, add a task or subtask, open the file, delete. Actions on a parent
+// include its subtasks, as everywhere else (tags excepted: they're per task).
+// It follows the store, so adding or removing a tag updates it in place.
 
 import 'package:flutter/material.dart';
 
 import '../core/day.dart';
 import '../core/store.dart';
 import '../core/task.dart';
+import 'tags.dart';
 import 'theme.dart';
 
 enum SheetAction { due, eta, addBelow, addSubtask, open, delete, select }
 
 class TaskSheet extends StatefulWidget {
-  const TaskSheet({super.key, required this.task, required this.onState, required this.onSave, required this.onAction, this.onTag});
+  const TaskSheet({
+    super.key,
+    required this.store,
+    required this.taskKey,
+    required this.onState,
+    required this.onSave,
+    required this.onAction,
+    this.tags = const [],
+    this.onTag,
+    this.onAddTag,
+    this.onRemoveTag,
+  });
 
-  final Task task;
+  final TaskStore store;
+  final LineKey taskKey;
+  final List<String> tags; // every tag in use, for suggestions
   final ValueChanged<TaskState> onState;
   final ValueChanged<String> onSave;
   final ValueChanged<SheetAction> onAction;
   final ValueChanged<String>? onTag; // show everything with this tag
+  final ValueChanged<String>? onAddTag, onRemoveTag; // these keep the sheet open
 
   @override
   State<TaskSheet> createState() => _TaskSheetState();
 }
 
 class _TaskSheetState extends State<TaskSheet> {
-  late final TextEditingController _text = TextEditingController(text: widget.task.content);
+  late Task _task = widget.store.taskFor(widget.taskKey)!;
+  late final TextEditingController _text = TextEditingController(text: _task.content);
   bool _dirty = false;
 
   @override
+  void initState() {
+    super.initState();
+    widget.store.addListener(_onStore);
+  }
+
+  @override
   void dispose() {
+    widget.store.removeListener(_onStore);
     _text.dispose();
     super.dispose();
+  }
+
+  void _onStore() {
+    final t = widget.store.taskFor(widget.taskKey);
+    if (t == null) {
+      Navigator.maybePop(context); // gone (deleted elsewhere)
+      return;
+    }
+    setState(() {
+      if (!_dirty && t.content != _text.text) _text.text = t.content;
+      _task = t;
+    });
+  }
+
+  Future<void> _addTag() async {
+    final tag = await pickTag(context, tags: widget.tags, exclude: {for (final t in _task.tags) t.toLowerCase()});
+    if (tag != null) widget.onAddTag?.call(tag);
   }
 
   void _save() {
@@ -40,7 +81,7 @@ class _TaskSheetState extends State<TaskSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final t = widget.task;
+    final t = _task;
     final theme = Theme.of(context);
     final colors = context.colors;
     final subs = t.children.isEmpty ? '' : ' (and ${t.subTotal} subtask${t.subTotal == 1 ? '' : 's'})';
@@ -90,15 +131,39 @@ class _TaskSheetState extends State<TaskSheet> {
                   ),
                 ),
               ),
-              if (t.tags.isNotEmpty && widget.onTag != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-                  child: Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [for (final tag in t.tags) TagPill(tag: tag, onTap: () => widget.onTag!(tag))],
-                  ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: TagSuggestions(controller: _text, tags: widget.tags),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final tag in t.tags)
+                      TagPill(
+                        tag: tag,
+                        onTap: () => widget.onTag?.call(tag),
+                        onRemove: widget.onRemoveTag == null || _dirty ? null : () => widget.onRemoveTag!(tag),
+                      ),
+                    if (widget.onAddTag != null && !_dirty)
+                      GestureDetector(
+                        key: const Key('addTag'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: _addTag,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: colors.guide),
+                          ),
+                          child: Text('+ Tag', style: TextStyle(fontSize: 13, color: colors.pillText)),
+                        ),
+                      ),
+                  ],
                 ),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
                 child: SegmentedButton<TaskState>(
@@ -129,111 +194,6 @@ class _TaskSheetState extends State<TaskSheet> {
               const SizedBox(height: 8),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A tag as a tappable outlined pill ("#office").
-class TagPill extends StatelessWidget {
-  const TagPill({super.key, required this.tag, required this.onTap, this.selected = false, this.trailing});
-  final String tag;
-  final VoidCallback onTap;
-  final bool selected;
-  final String? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return GestureDetector(
-      key: ValueKey('pill-$tag'),
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? colors.selection : null,
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: selected ? colors.tag : colors.guide),
-        ),
-        child: Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(
-                text: '#$tag',
-                style: TextStyle(color: colors.tag, fontWeight: FontWeight.w600),
-              ),
-              if (trailing != null)
-                TextSpan(
-                  text: '  $trailing',
-                  style: TextStyle(color: colors.dim),
-                ),
-            ],
-          ),
-          style: const TextStyle(fontSize: 13),
-        ),
-      ),
-    );
-  }
-}
-
-/// Every tag in use, to filter by one. Pops with the tag, or '' to clear the
-/// filter.
-class TagSheet extends StatelessWidget {
-  const TagSheet({super.key, required this.tags, this.active});
-  final List<TagCount> tags;
-  final String? active; // "#office", lower case
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = context.colors;
-    return SafeArea(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.7),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 8, 6),
-              child: Row(
-                children: [
-                  Expanded(child: Text('Tags', style: theme.textTheme.titleMedium)),
-                  if (active != null)
-                    TextButton(onPressed: () => Navigator.pop(context, ''), child: const Text('Clear filter')),
-                ],
-              ),
-            ),
-            if (tags.isEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                child: Text(
-                  'No tags yet. Add one anywhere in a task, like  #office',
-                  style: TextStyle(color: colors.dim),
-                ),
-              )
-            else
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-                  child: Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      for (final t in tags)
-                        TagPill(
-                          tag: t.name,
-                          trailing: '${t.open}', // open tasks
-                          selected: active == '#${t.name.toLowerCase()}',
-                          onTap: () => Navigator.pop(context, t.name),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
         ),
       ),
     );

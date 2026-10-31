@@ -20,6 +20,7 @@ import 'platform.dart';
 import 'settings.dart';
 import 'settings_page.dart';
 import 'task_list.dart';
+import 'tags.dart';
 import 'task_sheet.dart';
 import 'theme.dart';
 
@@ -243,6 +244,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return t.startsWith('#') && !t.contains(' ') && t.length > 1 ? t : null;
   }
 
+  List<String> get tagNames => [for (final t in store.tags()) t.name];
+
   Future<void> _pickTag() async {
     final tags = store.tags();
     final active = _activeTag?.toLowerCase();
@@ -384,6 +387,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> _add(Task anchor, {required bool subtask}) async {
     final t = await showAddTask(
       context,
+      tags: tagNames,
       title: subtask ? 'New subtask' : 'New task',
       where: subtask ? 'under "${anchor.text}"' : 'after "${anchor.text}"',
     );
@@ -398,7 +402,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> addTopLevel() async {
     if (store.roots.isEmpty) return _openSettings();
     final path = actions.inboxPath;
-    final t = await showAddTask(context, title: 'New task', where: relPathFor(path, store.roots));
+    final t = await showAddTask(context, tags: tagNames, title: 'New task', where: relPathFor(path, store.roots));
     if (t == null) return;
     final k = actions.append(path, t.text, due: t.due);
     if (k != null) _snack('Task added', undo: true);
@@ -431,10 +435,18 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         void close() => Navigator.pop(sheet);
         Task? fresh() => store.taskFor(key);
         return TaskSheet(
-          task: t,
+          store: store,
+          taskKey: key,
+          tags: tagNames,
           onTag: (tag) {
             close();
             filterTag(tag);
+          },
+          onAddTag: (tag) {
+            if (fresh() case final t?) actions.addTag(t, tag);
+          },
+          onRemoveTag: (tag) {
+            if (fresh() case final t?) actions.removeTag(t, tag);
           },
           onState: (s) {
             close();

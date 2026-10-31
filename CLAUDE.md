@@ -12,7 +12,7 @@ app's own folder). Linux desktop is enabled for development only.
 ## Build / run / test
 
 ```sh
-flutter test                          # core, store/models, widget tests (39)
+flutter test                          # core, store/models, widget tests (42)
 flutter analyze
 flutter test benchmark/               # 200k tasks / 5,000 files, JIT timings
 BENCH_DIR=~/notes flutter test benchmark/
@@ -51,7 +51,7 @@ search box is debounced 150 ms.
 | `lib/ui/task_list.dart` | `TaskListView` (fixed 48 px rows, gestures, drag-select), `TaskRow`, `CheckboxPainter`, `ProgressPill`. |
 | `lib/ui/home.dart` | Tabs, search + chips, selection mode + action bar, all action flows (`MainWindow`). |
 | `lib/ui/calendar.dart` | The desktop sidebar as a tab: month grid (folds to a week), day list, stat tiles. |
-| `lib/ui/task_sheet.dart`, `dialogs.dart`, `add_task.dart` | Task sheet; due, ETA, replace, prompts; add-task sheet, `DueRow`, `Pick`. |
+| `lib/ui/task_sheet.dart`, `dialogs.dart`, `add_task.dart`, `tags.dart` | Task sheet; due, ETA, replace, prompts; add-task sheet, `DueRow`, `Pick`; tag pills, tag list, suggestions, picker. |
 | `lib/ui/theme.dart`, `settings.dart`, `settings_page.dart` | Light/Soft/Dark/System + `TaskColors`; SharedPreferences (same keys as the desktop QSettings); folders page. |
 | `lib/ui/platform.dart` + `MainActivity.kt` | Storage access over the `todomd/storage` channel, folder picker, open file. |
 
@@ -106,6 +106,13 @@ search box is debounced 150 ms.
   tapping one sets the filter to `#tag` (again clears; from the calendar it switches
   to Tasks). Also tappable in the task sheet. The `#` Tags chip in the filter bar
   lists every tag with its open-task count (`TaskStore.tags()`).
+- Typing `#…` in the add-task sheet or the task sheet's text box shows matching
+  existing tags (`TagSuggestions`, `lib/ui/tags.dart`); tapping one completes the word.
+- Task sheet: × on a tag removes it, "+ Tag" adds one (`pickTag`: type or pick).
+  `parser.addTag/removeTag`, `actions.addTag/removeTag`: **one task only**, not its
+  subtasks (unlike every other action); undoable. Removing keeps trailing punctuation
+  (`Call #mum, then` → `Call, then`). The sheet follows the store (looks its task up
+  by key), so it stays open and updates; tag editing is hidden while the text is dirty.
 
 ## Share / copy as list (added here first: port to the desktop)
 

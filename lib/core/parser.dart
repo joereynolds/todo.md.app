@@ -403,6 +403,70 @@ String setCreated(String line, Day date) {
   return line.substring(0, tl.prefixLen) + _appendToken(t.content, '+${isoDay(date)}');
 }
 
+bool Function(String, int, int) _isTag(String tag) {
+  final lower = tag.toLowerCase();
+  return (s, st, end) => tagToken(s, st, end)?.toLowerCase() == lower;
+}
+
+/// Appends "#tag" unless the line already has it (in any case).
+String addTag(String line, String tag) {
+  final tl = splitTaskLine(line);
+  if (tl == null || tagToken('#$tag') != tag) return line;
+  final content = line.substring(tl.prefixLen);
+  if (_hasToken(content, _isTag(tag))) return line;
+  return line.substring(0, tl.prefixLen) + _appendToken(content, '#$tag');
+}
+
+/// Removes every "#tag" (any case). Punctuation written after it stays, so
+/// "Call #mum, then" becomes "Call, then".
+String removeTag(String line, String tag) {
+  final tl = splitTaskLine(line);
+  if (tl == null) return line;
+  var content = line.substring(tl.prefixLen);
+  final isTag = _isTag(tag);
+  // Tokens with trailing punctuation keep it (in place of the tag) …
+  final b = StringBuffer();
+  var last = 0;
+  _forTokens(content, (st, end) {
+    if (!isTag(content, st, end)) return;
+    final suffix = content.substring(st + 1 + tagToken(content, st, end)!.length, end);
+    if (suffix.isEmpty) return;
+    var a = st;
+    while (a > 0 && _isSpace(content.codeUnitAt(a - 1))) {
+      a--;
+    }
+    b.write(content.substring(last, a));
+    b.write(suffix);
+    last = end;
+  });
+  b.write(content.substring(last));
+  content = b.toString();
+  // … and bare ones go with the space before them.
+  content = _removeTokens(content, isTag);
+  return line.substring(0, tl.prefixLen) + content;
+}
+
+void _forTokens(String s, void Function(int st, int end) f) {
+  final n = s.length;
+  for (var i = 0; i < n;) {
+    while (i < n && _isSpace(s.codeUnitAt(i))) {
+      i++;
+    }
+    final st = i;
+    while (i < n && !_isSpace(s.codeUnitAt(i))) {
+      i++;
+    }
+    if (st == i) break;
+    f(st, i);
+  }
+}
+
+bool _hasToken(String s, bool Function(String, int, int) pred) {
+  var found = false;
+  _forTokens(s, (st, end) => found = found || pred(s, st, end));
+  return found;
+}
+
 String setContent(String line, String content) {
   final tl = splitTaskLine(line);
   if (tl == null) return line;

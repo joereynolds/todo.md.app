@@ -159,7 +159,12 @@ class TaskFilter {
 
   /// True when terms or ETA conditions narrow the result (state toggles aside).
   bool get narrows =>
-      _terms.isNotEmpty || _textConds.isNotEmpty || _presetConds.isNotEmpty || _due.isNotEmpty || _tags.isNotEmpty || _isMask != 0;
+      _terms.isNotEmpty ||
+      _textConds.isNotEmpty ||
+      _presetConds.isNotEmpty ||
+      _due.isNotEmpty ||
+      _tags.isNotEmpty ||
+      _isMask != 0;
 
   bool get showsEverything => states == 0xF && !narrows;
 
