@@ -58,6 +58,7 @@ class CalendarPane extends StatefulWidget {
     required this.onReveal,
     required this.onToggle,
     required this.onSwipe,
+    this.onTag,
   });
 
   final TaskStore store;
@@ -67,6 +68,7 @@ class CalendarPane extends StatefulWidget {
   final ValueChanged<Task> onReveal;
   final ValueChanged<Task> onToggle;
   final void Function(Task, bool right) onSwipe;
+  final ValueChanged<String>? onTag;
 
   @override
   State<CalendarPane> createState() => _CalendarPaneState();
@@ -115,7 +117,7 @@ class _CalendarPaneState extends State<CalendarPane> {
                 onTapTask: widget.onReveal,
                 onToggle: widget.onToggle,
                 onSwipe: widget.onSwipe,
-                showFile: true,
+                onTag: widget.onTag,
               ),
             ),
             const Divider(),
@@ -304,7 +306,8 @@ class _Tiles extends StatelessWidget {
           child: InkWell(
             key: ValueKey('tile-$label'),
             borderRadius: BorderRadius.circular(6),
-            onTap: filter.isEmpty ? null : () => onFilter(on ? '' : filter),
+            // Nothing to show at 0, unless it's the active filter (tap clears it).
+            onTap: filter.isEmpty || (values[i] == 0 && !on) ? null : () => onFilter(on ? '' : filter),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               child: Row(

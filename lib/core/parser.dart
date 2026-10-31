@@ -93,7 +93,37 @@ int _digit(String s, int i) {
 bool _isEtaToken(String s, int st, int end) =>
     end - st >= 3 && s.codeUnitAt(st) == _tilde && parseEta(s, st + 1, end) >= 0;
 
-/// Fills text, dates and ETA from task.content.
+const int _hash = 0x23, _under = 0x5f;
+
+bool _isTagChar(int c) =>
+    (c >= 0x61 && c <= 0x7a) || // a-z
+    (c >= 0x41 && c <= 0x5a) || // A-Z
+    (c >= _zero && c <= _nine) ||
+    c == _under ||
+    c == _dash ||
+    c == _slash ||
+    c > 0x7f; // letters outside ASCII (and anything else non-ASCII)
+
+/// "#office", "#work/admin", "#office," -> the tag without '#' (trailing
+/// . , ; : ! ? ) are punctuation, not part of it); null if not a tag. A tag
+/// needs a character that isn't a digit, so "#1" or "#42" (issue numbers)
+/// aren't tags.
+String? tagToken(String s, [int st = 0, int? end]) {
+  end ??= s.length;
+  if (end - st < 2 || s.codeUnitAt(st) != _hash) return null;
+  while (end! > st + 1 && const [0x2e, 0x2c, 0x3b, 0x3a, 0x21, 0x3f, 0x29].contains(s.codeUnitAt(end - 1))) {
+    end--;
+  }
+  var word = false;
+  for (var i = st + 1; i < end; i++) {
+    final c = s.codeUnitAt(i);
+    if (!_isTagChar(c)) return null;
+    if (c < _zero || c > _nine) word = true;
+  }
+  return word && end > st + 1 ? s.substring(st + 1, end) : null;
+}
+
+/// Fills text, dates, ETA and tags from task.content.
 void parseMeta(Task t) {
   final c = t.content;
   final n = c.length;
@@ -112,6 +142,14 @@ void parseMeta(Task t) {
       if (eta >= 0) {
         t.eta = eta;
         t.etaText = c.substring(st + 1, i);
+        continue;
+      }
+    }
+    if (c.codeUnitAt(st) == _hash) {
+      final tag = tagToken(c, st, i);
+      if (tag != null) {
+        if (t.tags.isEmpty) t.tags = [];
+        if (!t.tags.any((x) => x.toLowerCase() == tag.toLowerCase())) t.tags.add(tag);
         continue;
       }
     }

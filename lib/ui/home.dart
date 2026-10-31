@@ -228,6 +228,36 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _applyFilter();
   }
 
+  /// Tapping a tag: show everything with it (in the Tasks tab when coming from
+  /// the calendar). Tapping the tag that's already the filter clears it.
+  void filterTag(String tag) {
+    final term = tagTerm(tag);
+    setFilter(search.text.trim().toLowerCase() == term ? '' : term);
+    if (tab == 2) _setTab(0);
+  }
+
+  /// The tag the filter is set to, when it's just that ("#office").
+  String? get _activeTag {
+    final t = search.text.trim();
+    return t.startsWith('#') && !t.contains(' ') && t.length > 1 ? t : null;
+  }
+
+  Future<void> _pickTag() async {
+    final tags = store.tags();
+    final active = _activeTag?.toLowerCase();
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheet) => TagSheet(tags: tags, active: active),
+    );
+    if (picked == null) return;
+    if (picked.isEmpty) {
+      setFilter('');
+    } else {
+      filterTag(picked);
+    }
+  }
+
   void _toggleState(TaskState s) {
     final on = !list.filter.stateVisible(s);
     for (final m in [list, agenda, day]) {
@@ -355,6 +385,10 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         Task? fresh() => store.taskFor(key);
         return TaskSheet(
           task: t,
+          onTag: (tag) {
+            close();
+            filterTag(tag);
+          },
           onState: (s) {
             close();
             if (fresh() case final t?) _state([t], s);
@@ -542,7 +576,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
               textInputAction: TextInputAction.search,
               autocorrect: false,
               decoration: InputDecoration(
-                hintText: 'Filter: words, due:today, ~<=15m, is:doing …',
+                hintText: 'Filter: words, #tag, due:today, ~<=15m …',
                 prefixIcon: const Icon(Icons.search, size: 20),
                 suffixIcon: ListenableBuilder(
                   listenable: search,
@@ -563,40 +597,55 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
             const SizedBox(height: 6),
             SizedBox(
               height: 32,
-              child: ListView(
+              child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                children: [
-                  PopupMenuButton<int>(
-                    key: const Key('etaFilter'),
-                    tooltip: 'Filter by ETA',
-                    initialValue: etaPreset,
-                    onSelected: _setEtaPreset,
-                    itemBuilder: (_) => [
-                      for (var i = 0; i < etaPresets.length; i++)
-                        PopupMenuItem(value: i, key: ValueKey('eta-$i'), child: Text(etaPresets[i].label)),
-                    ],
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: Chip(
-                        visualDensity: VisualDensity.compact,
-                        backgroundColor: etaPreset == 0 ? null : colors.selection,
-                        avatar: const Icon(Icons.timer_outlined, size: 16),
-                        label: Text(etaPreset == 0 ? 'ETA' : etaPresets[etaPreset].label),
+                child: Row(
+                  children: [
+                    PopupMenuButton<int>(
+                      key: const Key('etaFilter'),
+                      tooltip: 'Filter by ETA',
+                      initialValue: etaPreset,
+                      onSelected: _setEtaPreset,
+                      itemBuilder: (_) => [
+                        for (var i = 0; i < etaPresets.length; i++)
+                          PopupMenuItem(value: i, key: ValueKey('eta-$i'), child: Text(etaPresets[i].label)),
+                      ],
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: Chip(
+                          visualDensity: VisualDensity.compact,
+                          backgroundColor: etaPreset == 0 ? null : colors.selection,
+                          avatar: const Icon(Icons.timer_outlined, size: 16),
+                          label: Text(etaPreset == 0 ? 'ETA' : etaPresets[etaPreset].label),
+                        ),
                       ),
                     ),
-                  ),
-                  for (final (s, label) in _stateChips)
                     Padding(
                       padding: const EdgeInsets.only(right: 6),
-                      child: FilterChip(
-                        key: ValueKey('state-$label'),
-                        visualDensity: VisualDensity.compact,
-                        label: Text(label),
-                        selected: list.filter.stateVisible(s),
-                        onSelected: (_) => _toggleState(s),
+                      child: GestureDetector(
+                        key: const Key('tagFilter'),
+                        onTap: _pickTag,
+                        child: Chip(
+                          visualDensity: VisualDensity.compact,
+                          backgroundColor: _activeTag == null ? null : colors.selection,
+                          avatar: const Icon(Icons.tag, size: 16),
+                          label: Text(_activeTag ?? 'Tags'),
+                        ),
                       ),
                     ),
-                ],
+                    for (final (s, label) in _stateChips)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: FilterChip(
+                          key: ValueKey('state-$label'),
+                          visualDensity: VisualDensity.compact,
+                          label: Text(label),
+                          selected: list.filter.stateVisible(s),
+                          onSelected: (_) => _toggleState(s),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -613,6 +662,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         content: const SelectableText(
           'Space separated terms, all must match.\n\n'
           'Words match the task text or file path.\n\n'
+          'Tags:  #office  (#work also matches #work/admin)\n'
           'ETA:  ~<=15m  ~<1h  ~>2h  ~>=1d  ~30m  ~none  ~any\n'
           'Due:  due:overdue  due:today  due:week  due:none  due:any\n'
           'State:  is:todo  is:doing  is:done  is:cancelled  is:open',
@@ -639,6 +689,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           onSelectionChanged: _setSelection,
           onTapTask: _openTask,
           onToggle: toggleTask,
+          onTag: filterTag,
           onSwipe: _swipe,
           onRefresh: store.refresh,
           empty: store.loading ? const SizedBox() : empty('No tasks yet. Tap + to add one.'),
@@ -650,10 +701,10 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           controller: agendaScroll,
           selected: selected,
           highlight: flash,
-          showFile: true,
           onSelectionChanged: _setSelection,
           onTapTask: _openTask,
           onToggle: toggleTask,
+          onTag: filterTag,
           onSwipe: _swipe,
           onRefresh: store.refresh,
           empty: store.loading ? const SizedBox() : empty('Nothing due. Tasks with !YYYY-MM-DD show here.'),
@@ -669,6 +720,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           },
           onReveal: reveal,
           onToggle: toggleTask,
+          onTag: filterTag,
           onSwipe: _swipe,
         );
     }

@@ -33,10 +33,11 @@ class TaskColors extends ThemeExtension<TaskColors> {
     required this.pill,
     required this.pillText,
     required this.selection,
+    required this.tag,
   });
 
   final bool dark;
-  final Color dim, doing, overdue, today, quick, done, band, guide, checkBorder, pill, pillText, selection;
+  final Color dim, doing, overdue, today, quick, done, band, guide, checkBorder, pill, pillText, selection, tag;
 
   factory TaskColors.from(Color base, Color text, Color dim, Color selection, bool dark) => TaskColors(
     dark: dark,
@@ -52,6 +53,7 @@ class TaskColors extends ThemeExtension<TaskColors> {
     pill: _mix(base, text, dark ? 0.22 : 0.12),
     pillText: _mix(base, text, dark ? 0.85 : 0.78),
     selection: selection,
+    tag: dark ? const Color(0xffb69ae6) : const Color(0xff7446b0),
   );
 
   @override
@@ -100,7 +102,7 @@ ThemeData _build({
     borderRadius: BorderRadius.circular(6),
     side: BorderSide(color: line),
   );
-  const pad = EdgeInsets.symmetric(horizontal: 14, vertical: 10);
+  const pad = EdgeInsets.symmetric(horizontal: 12, vertical: 9);
   final buttonText = const TextStyle(fontSize: 14, fontWeight: FontWeight.w600);
   return ThemeData(
     useMaterial3: true,
@@ -116,6 +118,7 @@ ThemeData _build({
       elevation: 0,
       scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,
+      toolbarHeight: 52,
       shape: Border(bottom: BorderSide(color: line, width: 0.5)),
       titleTextStyle: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w600),
     ),
@@ -124,10 +127,10 @@ ThemeData _build({
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       indicatorColor: Colors.transparent,
-      height: 56,
+      height: 52,
       labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       iconTheme: WidgetStateProperty.resolveWith(
-        (s) => IconThemeData(size: 22, color: s.contains(WidgetState.selected) ? accent : dim),
+        (s) => IconThemeData(size: 20, color: s.contains(WidgetState.selected) ? accent : dim),
       ),
       labelTextStyle: WidgetStateProperty.resolveWith(
         (s) => TextStyle(
@@ -150,7 +153,7 @@ ThemeData _build({
     ),
     inputDecorationTheme: InputDecorationTheme(
       isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       border: OutlineInputBorder(
         borderRadius: radius,
         borderSide: BorderSide(color: line),

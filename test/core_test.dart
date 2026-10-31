@@ -211,6 +211,46 @@ void main() {
     expect(EtaCond.parse('~bad'), isNull);
   });
 
+  test('tags', () {
+    expect(parser.tagToken('#office'), 'office');
+    expect(parser.tagToken('#work/admin'), 'work/admin');
+    expect(parser.tagToken('#office,'), 'office');
+    expect(parser.tagToken('#café'), 'café');
+    expect(parser.tagToken('#42'), isNull); // issue numbers aren't tags
+    expect(parser.tagToken('#'), isNull);
+    expect(parser.tagToken('##x'), isNull);
+    expect(parser.tagToken('#a.b'), isNull);
+    final f = parse(
+      '- [ ] Do the thing at work #office ~15m\n'
+      '- [ ] Call #mum, then #Office again #office\n'
+      '- [ ] issue#3 and #42 and a#b\n'
+      '- [ ] file it #work/admin\n',
+    );
+    expect(f.tasks[0].text, 'Do the thing at work');
+    expect(f.tasks[0].tags, ['office']);
+    expect(f.tasks[0].eta, 15);
+    expect(f.tasks[1].text, 'Call then again');
+    expect(f.tasks[1].tags, ['mum', 'Office']); // case-insensitive, first spelling kept
+    expect(f.tasks[2].tags, isEmpty);
+    expect(f.tasks[2].text, 'issue#3 and #42 and a#b');
+
+    List<String> run(String text) {
+      final flt = TaskFilter()..setText(text);
+      return [
+        for (final t in f.tasks)
+          if (flt.matches(t)) t.text,
+      ];
+    }
+
+    expect(run('#office'), ['Do the thing at work', 'Call then again']);
+    expect(run('#OFFICE #mum'), ['Call then again']);
+    expect(run('#work'), ['file it']); // a parent tag matches its children
+    expect(run('#work/admin'), ['file it']);
+    expect(run('#wor'), isEmpty); // whole tags, not prefixes
+    expect(run('#42'), ['issue#3 and #42 and a#b']); // not a tag: a plain word
+    expect(tagTerm('Office'), '#office');
+  });
+
   test('addMonths clamps', () {
     expect(isoDay(addMonths(dayOf(2026, 1, 31), 1)), '2026-02-28');
     expect(isoDay(addMonths(dayOf(2026, 1, 15), -1)), '2025-12-15');

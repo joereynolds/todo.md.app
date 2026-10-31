@@ -212,6 +212,8 @@ void main() {
   testWidgets('filter box, state chips and ETA preset narrow the list', (tester) async {
     final home = await boot(tester, data: '- [ ] wash ~2m\n- [x] done\n- [ ] movie ~2h\n  - [ ] popcorn\n');
     expect(home.list.rows.length, 4); // done hidden by default
+    await tester.ensureVisible(find.byKey(const ValueKey('state-Done')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('state-Done')));
     await tester.pumpAndSettle();
     expect(home.list.rows.length, 5);
@@ -221,11 +223,43 @@ void main() {
     expect(home.list.rows.map((r) => r.task?.text), [null, 'movie', 'popcorn']); // parent kept
     home.setFilter('');
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('etaFilter')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('etaFilter')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('eta-1')));
     await tester.pumpAndSettle();
     expect(home.list.rows.map((r) => r.task?.text), [null, 'wash']);
+  });
+
+  testWidgets('tags show in the row; tapping one filters to it, again clears', (tester) async {
+    final home = await boot(tester, data: '- [ ] at work #office\n- [ ] at home\n- [ ] meeting #office ~1h\n');
+    expect(rowText('at work'), findsOneWidget); // the tag is out of the title
+    expect(find.byKey(const ValueKey('tag-office')), findsNWidgets(2));
+    await tester.tap(find.byKey(const ValueKey('tag-office')).first);
+    await tester.pumpAndSettle();
+    expect(home.search.text, '#office');
+    expect(home.list.rows.map((r) => r.task?.text), [null, 'at work', 'meeting']);
+    await tester.tap(find.byKey(const ValueKey('tag-office')).first);
+    await tester.pumpAndSettle();
+    expect(home.search.text, '');
+    expect(home.list.rows.length, 4);
+
+    // The tag list in the filter bar.
+    await tester.tap(find.byKey(const Key('tagFilter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pill-office')));
+    await tester.pumpAndSettle();
+    expect(home.search.text, '#office');
+
+    // And from the task sheet.
+    home.setFilter('');
+    await tester.pumpAndSettle();
+    await tester.tap(rowText('meeting'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pill-office')));
+    await tester.pumpAndSettle();
+    expect(home.search.text, '#office');
   });
 
   testWidgets('calendar: day list, tile filters, reveal in Tasks', (tester) async {
@@ -248,6 +282,14 @@ void main() {
     await tester.tap(find.text('late'));
     await tester.pumpAndSettle();
     expect(home.tab, 0); // revealed in the Tasks tab
+
+    // A tile at 0 does nothing: nothing to show.
+    await tester.tap(find.text('Calendar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tile-quick (≤ 2m)')));
+    await tester.pumpAndSettle();
+    expect(home.tab, 2);
+    expect(home.search.text, '');
   });
 
   testWidgets('agenda groups by day with relative labels', (tester) async {

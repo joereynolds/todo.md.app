@@ -223,6 +223,23 @@ class TaskStore extends ChangeNotifier {
     return n;
   }
 
+  /// Every tag in use, case-insensitively merged (shown as first written),
+  /// with how many open and how many tasks in all carry it. Sorted by name.
+  List<TagCount> tags() {
+    final byKey = <String, TagCount>{};
+    for (final f in _files) {
+      for (final t in f.tasks) {
+        if (t.tags.isEmpty) continue;
+        for (final tag in t.tags) {
+          final c = byKey.putIfAbsent(tag.toLowerCase(), () => TagCount(tag));
+          c.total++;
+          if (t.isOpen) c.open++;
+        }
+      }
+    }
+    return byKey.values.toList()..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  }
+
   @override
   void dispose() {
     _stopWatching();
@@ -571,4 +588,10 @@ class TaskStore extends ChangeNotifier {
 
   @visibleForTesting
   int get watchCount => _watches.length;
+}
+
+class TagCount {
+  TagCount(this.name);
+  final String name;
+  int open = 0, total = 0;
 }

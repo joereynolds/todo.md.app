@@ -18,13 +18,13 @@ import 'package:todomd/ui/settings.dart';
 const notes = {
   'home.md': '''# Home
 
-- [ ] Sort the kitchen !2026-11-01
+- [ ] Sort the kitchen !2026-11-01 #home
   - [x] Fix the tap x2026-10-29
     - [x] Call a plumber x2026-10-28
-  - [ ] Clean counter tops ~15m
+  - [ ] Clean counter tops ~15m #home #quick
   - [ ] Take bins out ~2m
 - [/] Paint the hallway ~2d
-- [ ] Renew car insurance !2026-10-28
+- [ ] Renew car insurance !2026-10-28 #admin
 - [ ] Buy christmas presents !2026-12-20 ~3h
 - [-] Fix the old shed -2026-10-20
 ''',

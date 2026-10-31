@@ -12,12 +12,13 @@ app's own folder). Linux desktop is enabled for development only.
 ## Build / run / test
 
 ```sh
-flutter test                          # core, store/models, widget tests (36)
+flutter test                          # core, store/models, widget tests (38)
 flutter analyze
 flutter test benchmark/               # 200k tasks / 5,000 files, JIT timings
 BENCH_DIR=~/notes flutter test benchmark/
 flutter test screenshots/ --update-goldens   # PNGs in screenshots/out (real fonts from the SDK cache)
 flutter build apk --release --split-per-abi
+make install-android                  # build + adb install the APK for the plugged-in phone's ABI
 ```
 
 Gradle 8.14 needs JDK 17–24; this machine's default is Java 26, so build with
@@ -47,7 +48,7 @@ search box is debounced 150 ms.
 | `lib/core/store.dart` | `TaskStore` (ChangeNotifier): roots, isolate load, per-dir watches, `refresh()`, the only writer, undo/redo. |
 | `lib/core/models.dart` | `FlatModel` / `TaskListModel` / `AgendaModel` (the desktop's `FlatTaskModel`). Rows are `ListRow`. |
 | `lib/core/actions.dart` | The edits behind every action (state, due, ETA, replace, delete, add). Always includes subtasks. |
-| `lib/ui/task_list.dart` | `TaskListView` (fixed 52 px rows, gestures, drag-select), `TaskRow`, `CheckboxPainter`, `ProgressPill`. |
+| `lib/ui/task_list.dart` | `TaskListView` (fixed 48 px rows, gestures, drag-select), `TaskRow`, `CheckboxPainter`, `ProgressPill`. |
 | `lib/ui/home.dart` | Tabs, search + chips, selection mode + action bar, all action flows (`MainWindow`). |
 | `lib/ui/calendar.dart` | The desktop sidebar as a tab: month grid (folds to a week), day list, stat tiles. |
 | `lib/ui/task_sheet.dart`, `dialogs.dart`, `add_task.dart` | Task sheet; due, ETA, replace, prompts; add-task sheet, `DueRow`, `Pick`. |
@@ -90,6 +91,21 @@ search box is debounced 150 ms.
   action (Undo) otherwise stays until dismissed (a reported annoyance).
 - Selection is held as `LineKey`s and pruned after every store change; Task
   objects are rebuilt on each change, as on the desktop.
+
+## Tags (added here first: port to the desktop)
+
+- A tag is a whitespace-separated word `#name`: letters, digits, `_ - /` (non-ASCII
+  counts as a letter), needing at least one non-digit (`#42` is not a tag). Trailing
+  `. , ; : ! ? )` are dropped (`#office,` → `office`). `a#b`, `##x`, `#a.b` aren't tags.
+- `parser.tagToken`; `Task.tags` keeps them as written, case-insensitively de-duplicated.
+  Like dates and ETA they're stripped from `Task.text` but stay in `content`.
+- Filter term `#tag` (case-insensitive) matches the tag or anything under it
+  (`#work` matches `#work/admin`), not prefixes (`#wor`).
+- UI: tags show on the title line, at the right edge (purple, `TaskColors.tag`,
+  at most half the width);
+  tapping one sets the filter to `#tag` (again clears; from the calendar it switches
+  to Tasks). Also tappable in the task sheet. The `#` Tags chip in the filter bar
+  lists every tag with its open-task count (`TaskStore.tags()`).
 
 ## Not done yet
 

@@ -5,6 +5,7 @@
 //   ~<=15m ~<1h ~>2h ~>=1d ~30m ~none ~any            ETA conditions
 //   due:overdue due:today due:week due:none due:any   (week = next 7 days)
 //   is:todo is:doing is:done is:cancelled is:open
+//   #tag            has that tag, or one under it (#work matches #work/admin)
 
 import 'day.dart';
 import 'parser.dart' as parser;
@@ -71,6 +72,18 @@ const etaPresets = [
   EtaPreset('No ETA', [EtaCond(EtaOp.none)]),
 ];
 
+/// [tag] in lower case, without '#'. "#work" also matches "#work/admin".
+bool hasTag(Task t, String tag) {
+  for (final x in t.tags) {
+    final l = x.toLowerCase();
+    if (l == tag || (l.length > tag.length && l.startsWith(tag) && l.codeUnitAt(tag.length) == 0x2f)) return true;
+  }
+  return false;
+}
+
+/// The filter text for a tag (what tapping a tag sets).
+String tagTerm(String tag) => '#${tag.toLowerCase()}';
+
 enum _Due { overdue, today, week, none, any }
 
 const _dueNames = {'overdue': _Due.overdue, 'today': _Due.today, 'week': _Due.week, 'none': _Due.none, 'any': _Due.any};
@@ -90,6 +103,7 @@ class TaskFilter {
   final List<EtaCond> _textConds = [];
   List<EtaCond> _presetConds = const [];
   final List<_Due> _due = [];
+  final List<String> _tags = []; // lower case, without '#'
   int _isMask = 0; // from is: terms, 0 = no constraint
   int states = 0xF;
   Day _today = today();
@@ -102,6 +116,7 @@ class TaskFilter {
     _terms.clear();
     _textConds.clear();
     _due.clear();
+    _tags.clear();
     _isMask = 0;
     _today = today();
     for (final term in text.split(' ')) {
@@ -112,6 +127,11 @@ class TaskFilter {
         continue;
       }
       final lower = term.toLowerCase();
+      final tag = parser.tagToken(lower);
+      if (tag != null) {
+        _tags.add(tag);
+        continue;
+      }
       if (lower.startsWith('due:')) {
         final d = _dueNames[lower.substring(4)];
         if (d != null) {
@@ -139,7 +159,7 @@ class TaskFilter {
 
   /// True when terms or ETA conditions narrow the result (state toggles aside).
   bool get narrows =>
-      _terms.isNotEmpty || _textConds.isNotEmpty || _presetConds.isNotEmpty || _due.isNotEmpty || _isMask != 0;
+      _terms.isNotEmpty || _textConds.isNotEmpty || _presetConds.isNotEmpty || _due.isNotEmpty || _tags.isNotEmpty || _isMask != 0;
 
   bool get showsEverything => states == 0xF && !narrows;
 
@@ -162,6 +182,9 @@ class TaskFilter {
         _Due.any => due != null,
       };
       if (!ok) return false;
+    }
+    for (final tag in _tags) {
+      if (!hasTag(t, tag)) return false;
     }
     for (final term in _terms) {
       if (!t.contentLower.contains(term) && !t.file.relPathLower.contains(term)) return false;

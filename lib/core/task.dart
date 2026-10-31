@@ -17,11 +17,12 @@ class Task {
 
   final String prefix; // "  - [ ] ": everything up to and including the space after ']'
   final String content; // raw text after the prefix, metadata tokens included
-  String text = ''; // content with date and ETA tokens stripped, for display
+  String text = ''; // content with date, ETA and tag tokens stripped, for display
 
   Day? due, created, completed, cancelled;
   int eta = 0; // estimate in minutes, 0 = none
   String etaText = ''; // as written, without the '~' (e.g. "90m")
+  List<String> tags = const []; // as written, without the '#' (e.g. "office", "work/admin")
 
   int subDone = 0; // completed descendants
   int subTotal = 0; // non-cancelled descendants

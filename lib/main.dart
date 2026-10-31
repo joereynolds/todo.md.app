@@ -37,8 +37,33 @@ class TodoApp extends StatelessWidget {
             _ => ThemeMode.light,
           },
           home: HomePage(store: store, settings: settings),
+          // Everything a touch smaller than stock: scale all text on top of
+          // the system font size.
+          builder: (context, child) {
+            final mq = MediaQuery.of(context);
+            return MediaQuery(data: mq.copyWith(textScaler: _Scaled(mq.textScaler, 0.93)), child: child!);
+          },
         );
       },
     );
   }
+}
+
+class _Scaled extends TextScaler {
+  const _Scaled(this.inner, this.factor);
+  final TextScaler inner;
+  final double factor;
+
+  @override
+  double scale(double fontSize) => inner.scale(fontSize) * factor;
+
+  @override
+  // ignore: deprecated_member_use
+  double get textScaleFactor => inner.textScaleFactor * factor;
+
+  @override
+  bool operator ==(Object other) => other is _Scaled && other.inner == inner && other.factor == factor;
+
+  @override
+  int get hashCode => Object.hash(inner, factor);
 }

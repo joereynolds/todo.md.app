@@ -19,11 +19,11 @@ import '../core/models.dart';
 import '../core/task.dart';
 import 'theme.dart';
 
-const double rowExtent = 52;
-const double _indentStep = 18;
-const double _chevronWidth = 28;
-const double _checkWidth = 38;
-const double _leftPad = 4;
+const double rowExtent = 48;
+const double _indentStep = 16;
+const double _chevronWidth = 22;
+const double _checkWidth = 30;
+const double _leftPad = 0;
 
 LineKey keyOf(Task t) => (path: t.file.path, line: t.line);
 
@@ -39,10 +39,10 @@ class TaskListView extends StatefulWidget {
     this.onHeaderLongPress,
     this.onRefresh,
     this.controller,
-    this.showFile = false,
     this.allowSelection = true,
     this.empty,
     this.highlight,
+    this.onTag,
   });
 
   /// Briefly highlighted row (a task just added or revealed).
@@ -53,11 +53,11 @@ class TaskListView extends StatefulWidget {
   final ValueChanged<Set<LineKey>> onSelectionChanged;
   final ValueChanged<Task> onTapTask;
   final ValueChanged<Task> onToggle;
+  final ValueChanged<String>? onTag; // tapping a tag
   final void Function(Task task, bool right)? onSwipe; // right = toggle done, left = due date
   final ValueChanged<int>? onHeaderLongPress; // row index
   final Future<void> Function()? onRefresh;
   final ScrollController? controller;
-  final bool showFile;
   final bool allowSelection;
   final Widget? empty;
 
@@ -238,10 +238,10 @@ class _TaskListViewState extends State<TaskListView> {
       task: t,
       row: r,
       selected: selected,
-      showFile: widget.showFile,
       onTap: () => _tapRow(i),
       onChevron: () => m.toggle(i),
       onCheck: _selecting ? () => _tapRow(i) : () => widget.onToggle(t),
+      onTag: _selecting ? null : widget.onTag,
     );
     final swipe = widget.onSwipe;
     if (swipe == null || _selecting) return row;
@@ -362,7 +362,7 @@ class _HeaderRow extends StatelessWidget {
             const SizedBox(width: 4),
             Expanded(child: label),
             ?trailing,
-            const SizedBox(width: 14),
+            const SizedBox(width: 12),
           ],
         ),
       ),
@@ -387,7 +387,7 @@ class _Chevron extends StatelessWidget {
         child: AnimatedRotation(
           turns: expanded ? 0.25 : 0,
           duration: const Duration(milliseconds: 120),
-          child: Icon(Icons.chevron_right, size: 20, color: context.colors.checkBorder),
+          child: Icon(Icons.chevron_right, size: 18, color: context.colors.checkBorder),
         ),
       ),
     );
@@ -426,16 +426,17 @@ class TaskRow extends StatelessWidget {
     required this.task,
     required this.row,
     required this.selected,
-    required this.showFile,
     required this.onTap,
     required this.onChevron,
     required this.onCheck,
+    this.onTag,
   });
 
   final Task task;
   final ListRow row;
-  final bool selected, showFile;
+  final bool selected;
   final VoidCallback onTap, onChevron, onCheck;
+  final ValueChanged<String>? onTag; // null: tags aren't tappable (selecting)
 
   @override
   Widget build(BuildContext context) {
@@ -498,9 +499,33 @@ class TaskRow extends StatelessWidget {
         ),
       );
     }
-    if (showFile) {
-      if (meta.isNotEmpty) meta.add(const TextSpan(text: '   '));
-      meta.add(TextSpan(text: '${t.file.relPath}:${t.line + 1}'));
+    // Tags sit on the title line, at the right edge.
+    final tags = <InlineSpan>[];
+    for (final tag in t.tags) {
+      if (tags.isNotEmpty) tags.add(const TextSpan(text: ' '));
+      final label = TextSpan(
+        text: '#$tag',
+        style: TextStyle(color: t.isOpen ? colors.tag : colors.dim),
+      );
+      final onTag = this.onTag;
+      tags.add(
+        onTag == null
+            ? label
+            : WidgetSpan(
+                alignment: PlaceholderAlignment.baseline,
+                baseline: TextBaseline.alphabetic,
+                // A bigger target than the text, so it can be hit with a thumb.
+                child: GestureDetector(
+                  key: ValueKey('tag-$tag'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => onTag(tag),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                    child: Text.rich(label),
+                  ),
+                ),
+              ),
+      );
     }
 
     return Material(
@@ -521,7 +546,7 @@ class TaskRow extends StatelessWidget {
                   height: rowExtent,
                   child: Center(
                     child: CustomPaint(
-                      size: const Size(19, 19),
+                      size: const Size(17, 17),
                       painter: CheckboxPainter(t.state, colors, selected: selected),
                     ),
                   ),
@@ -532,7 +557,34 @@ class TaskRow extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(t.text.isEmpty ? ' ' : t.text, style: style, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    LayoutBuilder(
+                      builder: (context, c) {
+                        final title = Text(
+                          t.text.isEmpty ? ' ' : t.text,
+                          style: style,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        );
+                        if (tags.isEmpty) return title;
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Expanded(child: title), // pushes the tags to the right edge
+                            const SizedBox(width: 6),
+                            ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: c.maxWidth * 0.5),
+                              child: Text.rich(
+                                TextSpan(children: tags),
+                                style: const TextStyle(fontSize: 13),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                     if (meta.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
@@ -547,7 +599,7 @@ class TaskRow extends StatelessWidget {
                 ),
               ),
               ProgressPill(done: t.subDone, total: t.subTotal),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
             ],
           ),
         ),
