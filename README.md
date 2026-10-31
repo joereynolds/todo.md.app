@@ -1,9 +1,8 @@
 # Todo.md (app)
 
-The phone version of [todo.md](https://github.com/joereynolds/todo.md). Same everything, just on a phone.
+The phone version of [todo.md](https://github.com/joereynolds/todo.md).
 
-Point it at a folder of notes and it'll find every task in every `.md` file
-under it.
+Point it at a folder of notes and it'll find every task in every `.md` file.
 
 ## Installing
 
