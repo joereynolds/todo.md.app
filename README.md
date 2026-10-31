@@ -1,7 +1,6 @@
 # Todo.md (app)
 
-The phone version of [todo.md](https://github.com/joereynolds/todo.md). Same
-tasks, same markdown, same everything, just with your thumbs.
+The phone version of [todo.md](https://github.com/joereynolds/todo.md). Same everything, just on a phone.
 
 Point it at a folder of notes and it'll find every task in every `.md` file
 under it.
@@ -10,20 +9,11 @@ under it.
 
 ### Android
 
-Grab an APK from [releases](https://github.com/joereynolds/todo.md.app/releases).
-`arm64-v8a` is the one you want on pretty much any phone from the last few
-years. Not sure? Get the `universal` one.
-
-It'll ask for "All files access" when you add a folder. That's so it can read
-your notes straight off storage, which is a lot faster than going through
-Android's file picker API when you've got thousands of files.
-
-Syncthing, Nextcloud, whatever. As long as the files are on the phone it works.
+TBD
 
 ### iOS
 
-No builds yet. It does build from source, but iOS only lets it see its own
-folder (Files › On My iPhone › todo.md) so put or sync your notes there.
+Lol. Build it yourself and pray.
 
 ### From source
 
@@ -33,22 +23,6 @@ Needs Flutter.
 flutter build apk --release --split-per-abi
 adb install build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 ```
-
-## Using it
-
-Three tabs. Tasks (everything, grouped by file), Agenda (by due date) and
-Calendar (pick a day, see what's due, plus some quick filters).
-
-- Tap the checkbox to tick it off. Subtasks come with it
-- Tap a task to edit it, change its state, due date, ETA, add subtasks etc...
-- Swipe right to mark done, swipe left to set a due date
-- Long press then drag to select a bunch. Then mark them all done, set a due
-  date, an ETA, whatever
-- Tap a file or day header to fold it up
-- Pull down to refresh
-
-Anything you do to a task also happens to its subtasks. Everything can be
-undone.
 
 ### Filtering
 
