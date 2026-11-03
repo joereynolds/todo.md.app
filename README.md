@@ -11,8 +11,6 @@ Point it at a folder of notes and it'll find every task in every `.md` file.
   <img src="docs/screenshots/calendar.png" alt="Calendar: month, the day's tasks, quick counts" width="200">
 </p>
 
-<sub>Midnight theme. Regenerate with `flutter test screenshots/ --update-goldens && python3 tool/readme_shots.py`.</sub>
-
 ## Installing
 
 ### Android
