@@ -204,8 +204,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (!c.hasClients) return;
       final pos = c.position;
       final top = c.offset, bottom = top + pos.viewportDimension;
-      final y = row * rowExtent;
-      if (y >= top && y + rowExtent <= bottom) return;
+      final layout = RowLayout(m.rows);
+      final y = layout.offsetOf(row);
+      if (y >= top && y + layout.extentOf(row) <= bottom) return;
       c.jumpTo((y - pos.viewportDimension / 3).clamp(pos.minScrollExtent, pos.maxScrollExtent));
     });
   }

@@ -12,7 +12,7 @@ app's own folder). Linux desktop is enabled for development only.
 ## Build / run / test
 
 ```sh
-flutter test                          # core, store/models, widget tests (49)
+flutter test                          # core, store/models, widget tests (50)
 flutter analyze
 flutter test benchmark/               # 200k tasks / 5,000 files, JIT timings
 BENCH_DIR=~/notes flutter test benchmark/
@@ -49,12 +49,12 @@ search box is debounced 150 ms.
 | `lib/core/store.dart` | `TaskStore` (ChangeNotifier): roots, isolate load, per-dir watches, `refresh()`, the only writer, undo/redo. |
 | `lib/core/models.dart` | `FlatModel` / `TaskListModel` / `AgendaModel` (the desktop's `FlatTaskModel`). Rows are `ListRow`. |
 | `lib/core/actions.dart` | The edits behind every action (state, due, ETA, replace, delete, add). Always includes subtasks. |
-| `lib/ui/task_list.dart` | `TaskListView` (fixed 48 px rows, gestures, drag-select), `TaskRow`, `CheckboxPainter`, `ProgressPill`. |
+| `lib/ui/task_list.dart` | `TaskListView` (48 px tasks, 30 px headers: quiet dim line + hairline, no band, plain `done/total`; the user found the old band too big. Two heights so `RowLayout` finds offsets by binary search over header rows and `_RowSliver` uses it: Flutter's own varied-extent list sums every height per layout, too slow at 200k), gestures, drag-select, `TaskRow`, `CheckboxPainter`, `ProgressPill`. |
 | `lib/ui/home.dart` | Tabs, views strip + swiper, search box, selection mode + action bar, all action flows (`MainWindow`). |
 | `lib/ui/filter_sheet.dart` | The search box's tune button: state toggles, ETA preset, tag list, "Search tips". |
 | `lib/ui/calendar.dart` | The desktop sidebar as a tab: month grid (folds to a week), day list, stat tiles. |
 | `lib/ui/task_sheet.dart`, `dialogs.dart`, `add_task.dart`, `tags.dart` | Task sheet; due, ETA, replace, prompts; add-task sheet, `DueRow`, `Pick`; tag pills, tag list, suggestions, picker. |
-| `lib/ui/theme.dart`, `settings.dart`, `settings_page.dart` | Light/Soft/Dark/System and the desktop's Clean/Midnight/Paper (same tokens; accent colours in-progress; Midnight's pill tabs = nav-bar pill; Paper's card = `TaskColors.card`, `_card` in home; no roomier rows, they stay 48 px) + `TaskColors`; SharedPreferences (same keys as the desktop QSettings, plus `SavedView`s); folders page. |
+| `lib/ui/theme.dart`, `settings.dart`, `settings_page.dart` | Light/Soft/Dark/System and the desktop's Clean/Midnight/Paper (same tokens; accent colours in-progress; Midnight's pill tabs = nav-bar pill; Paper's card = `TaskColors.card`, `_card` in home; no roomier rows, tasks stay 48 px) + `TaskColors`; SharedPreferences (same keys as the desktop QSettings, plus `SavedView`s); folders page. |
 | `lib/ui/views.dart` | `ViewStrip` (tabs along the top), `ViewSwiper` (horizontal swipes step views), view editor. |
 | `lib/core/templates.dart`, `lib/ui/templates_page.dart` | Templates: dir, names, save/instantiate; list page, editor, picker. |
 | `lib/ui/help_page.dart`, `filter_help.dart` | ⋮ → Help (how the app works, plain words; keep it in step with features), and the search box's ? sheet (examples tap to apply). |

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:todomd/core/day.dart';
+import 'package:todomd/core/models.dart';
 import 'package:todomd/core/store.dart';
 import 'package:todomd/core/task.dart';
 import 'package:todomd/main.dart';
@@ -71,6 +72,32 @@ Future<void> templateLoaded(WidgetTester tester) async {
 }
 
 void main() {
+  test('RowLayout: short headers, offsets and hit rows by binary search', () {
+    ListRow h() => ListRow(null, 0, 0, true, true);
+    ListRow t() =>
+        ListRow(Task(line: 0, indent: 0, state: TaskState.todo, prefix: '- [ ] ', content: 'x'), 0, 1, false, true);
+    final l = RowLayout([h(), t(), t(), h(), t()]);
+    expect(
+      [for (var i = 0; i <= 5; i++) l.offsetOf(i)],
+      [
+        0,
+        headerExtent,
+        headerExtent + rowExtent,
+        headerExtent + 2 * rowExtent,
+        2 * headerExtent + 2 * rowExtent,
+        2 * headerExtent + 3 * rowExtent,
+      ],
+    );
+    expect(l.total, 2 * headerExtent + 3 * rowExtent);
+    expect([l.extentOf(0), l.extentOf(1), l.extentOf(3)], [headerExtent, rowExtent, headerExtent]);
+    expect(l.indexAt(0), 0);
+    expect(l.indexAt(headerExtent - 1), 0);
+    expect(l.indexAt(headerExtent), 1);
+    expect(l.indexAt(headerExtent + 2 * rowExtent + 1), 3);
+    expect(l.indexAt(1e9), 4); // clamped
+    expect(RowLayout(const []).indexAt(10), 0);
+  });
+
   testWidgets('layout: file header, tasks, subtask indented, progress pill', (tester) async {
     final home = await boot(tester);
     expect(home.list.rows.length, 5);

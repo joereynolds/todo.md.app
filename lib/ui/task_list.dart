@@ -1,5 +1,7 @@
 // The flat tree list shared by the Tasks tab, the Agenda and the calendar's
-// day list. Fixed row extent, so 200k rows scroll and jump in O(1).
+// day list. Tasks are [rowExtent] tall and headers [headerExtent]; with
+// only two heights a row's offset is a binary search over the header rows
+// ([RowLayout]), so 200k rows still scroll and jump without summing heights.
 //
 // Gestures:
 //   tap row          open the task sheet (or toggle selection while selecting)
@@ -12,6 +14,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../core/day.dart';
@@ -20,6 +23,7 @@ import '../core/task.dart';
 import 'theme.dart';
 
 const double rowExtent = 48;
+const double headerExtent = 30;
 const double _indentStep = 16;
 const double _chevronWidth = 22;
 const double _checkWidth = 30;
@@ -76,7 +80,24 @@ class _TaskListViewState extends State<TaskListView> {
   Timer? _autoScroll;
 
   @override
+  void initState() {
+    super.initState();
+    widget.model.addListener(_rowsChanged);
+  }
+
+  @override
+  void didUpdateWidget(TaskListView old) {
+    super.didUpdateWidget(old);
+    if (old.model != widget.model) {
+      old.model.removeListener(_rowsChanged);
+      widget.model.addListener(_rowsChanged);
+      _layoutCache = null;
+    }
+  }
+
+  @override
   void dispose() {
+    widget.model.removeListener(_rowsChanged);
     _autoScroll?.cancel();
     _own?.dispose();
     super.dispose();
@@ -85,12 +106,17 @@ class _TaskListViewState extends State<TaskListView> {
   FlatModel get m => widget.model;
   bool get _selecting => widget.selected.isNotEmpty;
 
+  // Rebuilt only when the rows change, not on every rebuild (a status
+  // message, the selection): it scans every row.
+  RowLayout? _layoutCache;
+  RowLayout get _layout => _layoutCache ??= RowLayout(m.rows);
+  void _rowsChanged() => _layoutCache = null;
+
   int? _rowAtGlobal(double globalY) {
     final box = _listKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || m.rows.isEmpty) return null;
     final local = box.globalToLocal(Offset(0, globalY)).dy;
-    final i = ((local + _ctrl.offset) / rowExtent).floor();
-    return i.clamp(0, m.rows.length - 1);
+    return _layout.indexAt(local + _ctrl.offset);
   }
 
   void _onLongPressStart(LongPressStartDetails d) {
@@ -202,13 +228,16 @@ class _TaskListViewState extends State<TaskListView> {
           );
           return widget.onRefresh == null ? child : RefreshIndicator(onRefresh: widget.onRefresh!, child: child);
         }
-        Widget list = ListView.builder(
+        Widget list = CustomScrollView(
           key: _listKey,
           controller: _ctrl,
           physics: const AlwaysScrollableScrollPhysics(),
-          itemExtent: rowExtent,
-          itemCount: m.rows.length,
-          itemBuilder: _buildRow,
+          slivers: [
+            _RowSliver(
+              layout: _layout,
+              delegate: SliverChildBuilderDelegate(_buildRow, childCount: m.rows.length),
+            ),
+          ],
         );
         list = Scrollbar(controller: _ctrl, interactive: true, thickness: 6, child: list);
         list = GestureDetector(
@@ -227,7 +256,7 @@ class _TaskListViewState extends State<TaskListView> {
   Widget _buildRow(BuildContext context, int i) {
     final r = m.rows[i];
     if (r.isHeader) {
-      return _HeaderRow(model: m, row: r, onTap: () => _tapRow(i), onChevron: () => m.toggle(i));
+      return _HeaderRow(model: m, row: r, first: i == 0, onTap: () => _tapRow(i), onChevron: () => m.toggle(i));
     }
     final t = r.task!;
     final k = keyOf(t);
@@ -244,10 +273,133 @@ class _TaskListViewState extends State<TaskListView> {
   }
 }
 
+/// Row offsets for a list of [rowExtent] tasks and [headerExtent] headers.
+class RowLayout {
+  RowLayout(List<ListRow> rows)
+    : count = rows.length,
+      _headers = [
+        for (var i = 0; i < rows.length; i++)
+          if (rows[i].isHeader) i,
+      ];
+
+  final int count;
+  final List<int> _headers; // header row indices, ascending
+
+  /// Headers before row [i].
+  int _before(int i) {
+    var lo = 0, hi = _headers.length;
+    while (lo < hi) {
+      final mid = (lo + hi) >> 1;
+      if (_headers[mid] < i) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo;
+  }
+
+  bool isHeader(int i) {
+    final h = _before(i);
+    return h < _headers.length && _headers[h] == i;
+  }
+
+  double extentOf(int i) => isHeader(i) ? headerExtent : rowExtent;
+
+  double offsetOf(int i) {
+    final h = _before(i);
+    return h * headerExtent + (i - h) * rowExtent;
+  }
+
+  double get total => offsetOf(count);
+
+  /// The row at scroll offset [y] (clamped to the rows).
+  int indexAt(double y) {
+    if (count == 0) return 0;
+    var lo = 0, hi = count - 1;
+    while (lo < hi) {
+      final mid = (lo + hi + 1) >> 1;
+      if (offsetOf(mid) <= y) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return lo;
+  }
+}
+
+/// A sliver whose children take their heights from a [RowLayout]. Flutter's
+/// own varied-extent list sums every height above the viewport on each
+/// layout; this asks the layout instead.
+class _RowSliver extends SliverMultiBoxAdaptorWidget {
+  const _RowSliver({required super.delegate, required this.layout});
+  final RowLayout layout;
+
+  @override
+  _RenderRowSliver createRenderObject(BuildContext context) =>
+      _RenderRowSliver(childManager: context as SliverMultiBoxAdaptorElement, layout: layout);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderRowSliver renderObject) => renderObject.rows = layout;
+}
+
+class _RenderRowSliver extends RenderSliverFixedExtentBoxAdaptor {
+  _RenderRowSliver({required super.childManager, required RowLayout layout}) : _layout = layout;
+
+  RowLayout _layout;
+  set rows(RowLayout v) {
+    if (identical(v, _layout)) return;
+    _layout = v;
+    markNeedsLayout();
+  }
+
+  @override
+  double? get itemExtent => null;
+
+  @override
+  ItemExtentBuilder get itemExtentBuilder => _extent;
+
+  double? _extent(int i, SliverLayoutDimensions _) => i < _layout.count ? _layout.extentOf(i) : null;
+
+  @override
+  double indexToLayoutOffset(double itemExtent, int index) => _layout.offsetOf(index);
+
+  @override
+  int getMinChildIndexForScrollOffset(double scrollOffset, double itemExtent) => _layout.indexAt(scrollOffset);
+
+  @override
+  int getMaxChildIndexForScrollOffset(double scrollOffset, double itemExtent) {
+    final i = _layout.indexAt(scrollOffset);
+    return i > 0 && _layout.offsetOf(i) >= scrollOffset ? i - 1 : i;
+  }
+
+  @override
+  double computeMaxScrollOffset(SliverConstraints constraints, double itemExtent) => _layout.total;
+
+  @override
+  double estimateMaxScrollOffset(
+    SliverConstraints constraints, {
+    int? firstIndex,
+    int? lastIndex,
+    double? leadingScrollOffset,
+    double? trailingScrollOffset,
+  }) => _layout.total;
+}
+
+/// A file (or, in the agenda, a day): a short, quiet line over its tasks, with
+/// a hairline above it rather than a band.
 class _HeaderRow extends StatelessWidget {
-  const _HeaderRow({required this.model, required this.row, required this.onTap, required this.onChevron});
+  const _HeaderRow({
+    required this.model,
+    required this.row,
+    required this.first,
+    required this.onTap,
+    required this.onChevron,
+  });
   final FlatModel model;
   final ListRow row;
+  final bool first;
   final VoidCallback onTap, onChevron;
 
   @override
@@ -255,7 +407,12 @@ class _HeaderRow extends StatelessWidget {
     final colors = context.colors;
     final theme = Theme.of(context);
     final g = model.groups[row.group];
-    final base = theme.textTheme.bodyMedium!.copyWith(fontWeight: FontWeight.w600, fontSize: 14);
+    final base = theme.textTheme.bodySmall!.copyWith(
+      fontWeight: FontWeight.w600,
+      fontSize: 12.5,
+      color: colors.dim,
+      letterSpacing: 0.2,
+    );
     Widget label;
     Widget? trailing;
     final m = model;
@@ -293,21 +450,35 @@ class _HeaderRow extends StatelessWidget {
     } else {
       final f = g.file!;
       label = Text(f.relPath, style: base, maxLines: 1, overflow: TextOverflow.ellipsis);
-      trailing = ProgressPill(done: f.done, total: f.total);
+      if (f.total > 0) {
+        trailing = Text(
+          '${f.done}/${f.total}',
+          style: base.copyWith(
+            fontWeight: FontWeight.w400,
+            color: f.done >= f.total ? colors.done : colors.dim,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        );
+      }
     }
     return Material(
-      color: colors.band,
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        child: Row(
-          children: [
-            const SizedBox(width: _leftPad),
-            _Chevron(visible: row.hasChildren, expanded: row.expanded, onTap: onChevron),
-            const SizedBox(width: 4),
-            Expanded(child: label),
-            ?trailing,
-            const SizedBox(width: 12),
-          ],
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: first ? null : Border(top: BorderSide(color: colors.guide, width: 0.5)),
+          ),
+          child: Row(
+            children: [
+              const SizedBox(width: _leftPad),
+              _Chevron(visible: row.hasChildren, expanded: row.expanded, onTap: onChevron, height: headerExtent),
+              const SizedBox(width: 4),
+              Expanded(child: label),
+              ?trailing,
+              const SizedBox(width: 14),
+            ],
+          ),
         ),
       ),
     );
@@ -315,9 +486,10 @@ class _HeaderRow extends StatelessWidget {
 }
 
 class _Chevron extends StatelessWidget {
-  const _Chevron({required this.visible, required this.expanded, required this.onTap});
+  const _Chevron({required this.visible, required this.expanded, required this.onTap, this.height = rowExtent});
   final bool visible, expanded;
   final VoidCallback onTap;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
@@ -327,7 +499,7 @@ class _Chevron extends StatelessWidget {
       onTap: onTap,
       child: SizedBox(
         width: _chevronWidth,
-        height: rowExtent,
+        height: height,
         child: AnimatedRotation(
           turns: expanded ? 0.25 : 0,
           duration: const Duration(milliseconds: 120),
