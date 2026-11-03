@@ -25,11 +25,7 @@ class TodoApp extends StatelessWidget {
         return MaterialApp(
           title: 'todo.md',
           debugShowCheckedModeBanner: false,
-          theme: switch (t) {
-            AppTheme.soft => softTheme(),
-            AppTheme.dark => darkTheme(),
-            _ => lightTheme(),
-          },
+          theme: themeData(t),
           darkTheme: darkTheme(),
           themeMode: switch (t) {
             AppTheme.system => ThemeMode.system,

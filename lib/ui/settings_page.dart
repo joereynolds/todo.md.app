@@ -21,6 +21,7 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   Settings get settings => widget.settings;
+  String? _error; // shown under the folder buttons
 
   void _setDirs(List<String> dirs) {
     settings.directories = dirs;
@@ -32,18 +33,17 @@ class _SettingsPageState extends State<SettingsPage> {
     if (dir == null || dir.trim().isEmpty) return;
     final n = normalizeRoot(dir.trim());
     if (!Directory(n).existsSync()) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$n does not exist')));
+      setState(() => _error = '$n does not exist');
       return;
     }
+    _error = null;
     final dirs = [...settings.directories];
     if (!dirs.contains(n)) dirs.add(n);
     _setDirs(dirs);
   }
 
   void _noAccess() {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('todo.md needs "All files access" to read your notes folders')));
+    setState(() => _error = 'todo.md needs "All files access" to read your notes folders');
   }
 
   Future<void> _pick() async {
@@ -123,6 +123,11 @@ class _SettingsPageState extends State<SettingsPage> {
               ],
             ),
           ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Text(_error!, style: TextStyle(color: colors.overdue, fontSize: 12.5)),
+            ),
           if (Platform.isIOS)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),

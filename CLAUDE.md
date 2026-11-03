@@ -12,7 +12,7 @@ app's own folder). Linux desktop is enabled for development only.
 ## Build / run / test
 
 ```sh
-flutter test                          # core, store/models, widget tests (42)
+flutter test                          # core, store/models, widget tests (43)
 flutter analyze
 flutter test benchmark/               # 200k tasks / 5,000 files, JIT timings
 BENCH_DIR=~/notes flutter test benchmark/
@@ -52,7 +52,8 @@ search box is debounced 150 ms.
 | `lib/ui/home.dart` | Tabs, search + chips, selection mode + action bar, all action flows (`MainWindow`). |
 | `lib/ui/calendar.dart` | The desktop sidebar as a tab: month grid (folds to a week), day list, stat tiles. |
 | `lib/ui/task_sheet.dart`, `dialogs.dart`, `add_task.dart`, `tags.dart` | Task sheet; due, ETA, replace, prompts; add-task sheet, `DueRow`, `Pick`; tag pills, tag list, suggestions, picker. |
-| `lib/ui/theme.dart`, `settings.dart`, `settings_page.dart` | Light/Soft/Dark/System + `TaskColors`; SharedPreferences (same keys as the desktop QSettings); folders page. |
+| `lib/ui/theme.dart`, `settings.dart`, `settings_page.dart` | Light/Soft/Dark/System and the desktop's Clean/Midnight/Paper (same tokens; accent colours in-progress; Midnight's pill tabs = nav-bar pill; Paper's card = `TaskColors.card`, `_card` in home; no roomier rows, they stay 48 px) + `TaskColors`; SharedPreferences (same keys as the desktop QSettings, plus `SavedView`s); folders page. |
+| `lib/ui/views.dart` | Views sheet (switch) and view editor. |
 | `lib/ui/platform.dart` + `MainActivity.kt` | Storage access over the `todomd/storage` channel, folder picker, open file. |
 
 ## Differences from the desktop (deliberate)
@@ -87,8 +88,10 @@ search box is debounced 150 ms.
   corners, thin borders, no tonal fills/tints, no ripples (`NoSplash`), no
   shadows, plain nav bar. Use the app's own `Pick` toggles and `MonthView`
   rather than Material chips and `showDatePicker`.
-- **Snackbars** must pass `persist: false`: in current Flutter a snackbar with an
-  action (Undo) otherwise stays until dismissed (a reported annoyance).
+- **No snackbars** (the user can't stand them): messages go in a small dim line
+  beside the title (`_say` / `_withStatus` in home), fading after 4 s, in both the
+  normal and the selection app bar. Undo is the app bar's button. The settings page
+  shows its errors inline.
 - Selection is held as `LineKey`s and pruned after every store change; Task
   objects are rebuilt on each change, as on the desktop.
 
@@ -105,7 +108,8 @@ search box is debounced 150 ms.
   at most half the width);
   tapping one sets the filter to `#tag` (again clears; from the calendar it switches
   to Tasks). Also tappable in the task sheet. The `#` Tags chip in the filter bar
-  lists every tag with its open-task count (`TaskStore.tags()`).
+  lists every tag on an open task, with the count (`TaskStore.tags()`); tags only on
+  done/cancelled tasks are left out (suggestions still offer them).
 - Typing `#…` in the add-task sheet or the task sheet's text box shows matching
   existing tags (`TagSuggestions`, `lib/ui/tags.dart`); tapping one completes the word.
 - Task sheet: × on a tag removes it, "+ Tag" adds one (`pickTag`: type or pick).
@@ -121,6 +125,23 @@ the `todomd/storage` channel) or "Copy as text". Either way the text is the sele
 tasks (not their subtasks) as `- text` lines,
 text only (no checkbox, dates, ETA, tags), in visual order, indented under selected
 ancestors (`actions.bulletList`). Clears the selection.
+
+## OR in filters, and saved views (added here first: port to the desktop)
+
+- **OR**: the word `OR` (capitals, on its own) between filter terms gives
+  alternatives: `a b OR c` = (a and b) or c. Lower-case `or` is a plain word.
+  `TaskFilter` parses into clauses (`_Clause`), matched if any clause holds.
+- **Views** (`lib/ui/views.dart`): a name + a filter in the same language. Saved in
+  SharedPreferences as JSON (`views/list`, active one in `views/current`). Tap the
+  title ("todo.md ▾", or the view's name) → list: All tasks, each view (pencil =
+  edit), "New view" (prefilled with the search box if it has text; that search is
+  then cleared). The editor has quick terms (due:week, due:overdue …) and tag pills
+  that toggle a term in or out (a tag after a tag is joined with OR), and a live
+  count of matching tasks (state toggles apply).
+- The active view's filter goes in `TaskFilter.setView` for **Tasks and Agenda** (not
+  the calendar day list), ANDed with the search box, so search narrows within it.
+  Picking a view from the Calendar tab switches to Tasks. Note `is:done` in a view
+  still needs the Done state toggle on, as with the search box.
 
 ## Not done yet
 

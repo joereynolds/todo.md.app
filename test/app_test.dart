@@ -187,12 +187,16 @@ void main() {
     );
   });
 
-  testWidgets('the undo snackbar goes away by itself', (tester) async {
+  testWidgets('messages show beside the title (no snackbar) and go away by themselves', (tester) async {
     await boot(tester);
     await tester.tapAt(checkbox(tester, 'a'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('Mark done: 1 line changed'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+    expect(
+      find.descendant(of: find.byType(AppBar), matching: find.text('Mark done: 1 line changed')),
+      findsOneWidget,
+    );
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
     expect(find.text('Mark done: 1 line changed'), findsNothing);
@@ -234,7 +238,7 @@ void main() {
   });
 
   testWidgets('tags show in the row; tapping one filters to it, again clears', (tester) async {
-    final home = await boot(tester, data: '- [ ] at work #office\n- [ ] at home\n- [ ] meeting #office ~1h\n');
+    final home = await boot(tester, data: '- [ ] at work #office\n- [ ] at home\n- [ ] meeting #office ~1h\n- [x] gone #old\n');
     expect(rowText('at work'), findsOneWidget); // the tag is out of the title
     expect(find.byKey(const ValueKey('tag-office')), findsNWidgets(2));
     await tester.tap(find.byKey(const ValueKey('tag-office')).first);
@@ -244,11 +248,12 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('tag-office')).first);
     await tester.pumpAndSettle();
     expect(home.search.text, '');
-    expect(home.list.rows.length, 4);
+    expect(home.list.rows.length, 4); // the done one is hidden
 
     // The tag list in the filter bar.
     await tester.tap(find.byKey(const Key('tagFilter')));
     await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('pill-old')), findsNothing); // only on a done task
     await tester.tap(find.byKey(const ValueKey('pill-office')));
     await tester.pumpAndSettle();
     expect(home.search.text, '#office');
@@ -328,6 +333,93 @@ void main() {
     store.undo();
     await tester.pumpAndSettle();
     expect(contents(), '- [ ] call, then #home\n- [ ] b #home\n');
+  });
+
+  testWidgets('views: create from the editor, switch, edit, delete; kept in settings', (tester) async {
+    final home = await boot(
+      tester,
+      data: '- [ ] song #music\n- [ ] film #video\n- [ ] photo #photography\n- [ ] soon !2026-11-02\n- [ ] other\n',
+    );
+    List<String?> shown() => [for (final r in home.list.rows) if (r.task != null) r.task!.text];
+    expect(find.text('todo.md'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('viewTitle')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('newView')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('viewName')), 'Media');
+    // Tag pills append, joined with OR.
+    for (final t in ['music', 'video', 'photography']) {
+      await tester.tap(find.descendant(of: find.byType(Wrap), matching: find.byKey(ValueKey('pill-$t'))).last);
+      await tester.pump();
+    }
+    final filter = tester.widget<TextField>(find.byKey(const Key('viewFilter')));
+    expect(filter.controller!.text, '#music OR #video OR #photography');
+    // Tapping a chosen one takes it out again.
+    await tester.tap(find.descendant(of: find.byType(Wrap), matching: find.byKey(const ValueKey('pill-video'))).last);
+    await tester.pump();
+    expect(filter.controller!.text, '#music OR #photography');
+    await tester.tap(find.descendant(of: find.byType(Wrap), matching: find.byKey(const ValueKey('pill-video'))).last);
+    await tester.pump();
+    expect(filter.controller!.text, '#music OR #photography OR #video');
+    expect(find.text('3 tasks match'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('saveView')));
+    await tester.pumpAndSettle();
+    expect(home.view?.name, 'Media');
+    expect(find.text('Media'), findsOneWidget); // the title
+    expect(shown(), ['song', 'film', 'photo']); // in file order
+    // The search box narrows within the view.
+    home.setFilter('film');
+    await tester.pumpAndSettle();
+    expect(shown(), ['film']);
+    home.setFilter('');
+    await tester.pumpAndSettle();
+
+    // A second one, then switch between them.
+    await tester.tap(find.byKey(const Key('viewTitle')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('newView')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('viewName')), 'media'); // taken (any case)
+    await tester.pump();
+    expect(find.textContaining('already a view'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('viewName')), 'Week');
+    await tester.tap(find.byKey(const ValueKey('quick-due:week')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('saveView')));
+    await tester.pumpAndSettle();
+    expect(shown(), ['soon']);
+    await tester.tap(find.byKey(const Key('viewTitle')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('view-Media')));
+    await tester.pumpAndSettle();
+    expect(shown(), ['song', 'film', 'photo']);
+
+    // Edit the active one: it updates in place.
+    await tester.tap(find.byKey(const Key('viewTitle')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('editView-Media')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('viewFilter')), '#music');
+    await tester.tap(find.byKey(const Key('saveView')));
+    await tester.pumpAndSettle();
+    expect(shown(), ['song']);
+    final settings = await Settings.load();
+    expect([for (final v in settings.views) '${v.name}=${v.filter}'], ['Media=#music', 'Week=due:week']);
+    expect(settings.currentView, 'Media');
+
+    // Delete it: back to all tasks.
+    await tester.tap(find.byKey(const Key('viewTitle')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('editView-Media')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('deleteView')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete').last); // confirm
+    await tester.pumpAndSettle();
+    expect(home.view, isNull);
+    expect(shown().length, 5);
+    expect((await Settings.load()).views.map((v) => v.name), ['Week']);
   });
 
   testWidgets('calendar: day list, tile filters, reveal in Tasks', (tester) async {

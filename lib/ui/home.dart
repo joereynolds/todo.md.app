@@ -23,6 +23,7 @@ import 'task_list.dart';
 import 'tags.dart';
 import 'task_sheet.dart';
 import 'theme.dart';
+import 'views.dart';
 
 const _stateChips = [
   (TaskState.todo, 'Todo'),
@@ -50,10 +51,13 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late final AgendaModel day; // the calendar's single-day list
   final search = TextEditingController();
   final listScroll = ScrollController(), agendaScroll = ScrollController();
-  Timer? _debounce, _flashTimer;
+  Timer? _debounce, _flashTimer, _statusTimer;
+  String? status; // the message beside the title
   late int tab = settings.tab.clamp(0, 2);
   late int etaPreset = settings.etaPreset.clamp(0, etaPresets.length - 1);
   Set<LineKey> selected = {};
+  late List<SavedView> views = settings.views;
+  SavedView? view; // the active one; null = all tasks
   LineKey? flash;
 
   bool get selecting => selected.isNotEmpty;
@@ -82,10 +86,15 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     for (final m in [list, agenda]) {
       m.filter.etaPreset = etaPresets[etaPreset].conds;
     }
+    final current = settings.currentView;
+    view = views.where((v) => v.name == current).firstOrNull;
+    for (final m in [list, agenda]) {
+      m.filter.setView(view?.filter ?? '');
+    }
     for (final m in [list, agenda, day]) {
       m.refilter();
     }
-    store.onMessage = _snack;
+    store.onMessage = _say;
     store.addListener(_onStore);
     WidgetsBinding.instance.addObserver(this);
     final dirs = settings.directories;
@@ -98,6 +107,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     store.removeListener(_onStore);
     _debounce?.cancel();
     _flashTimer?.cancel();
+    _statusTimer?.cancel();
     for (final m in [list, agenda, day]) {
       m.dispose();
     }
@@ -133,25 +143,51 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   // ------------------------------------------------------------ feedback
 
-  void _snack(String text, {bool undo = false}) {
+  /// A short message beside the title (no snackbars: the user can't stand
+  /// them). It fades after a few seconds; undo is the app bar's button.
+  void _say(String text) {
     if (!mounted) return;
-    final m = ScaffoldMessenger.of(context);
-    m.hideCurrentSnackBar();
-    m.showSnackBar(
-      SnackBar(
-        content: Text(text),
-        duration: const Duration(seconds: 4),
-        persist: false, // an action would otherwise keep it up until dismissed
-        action: undo ? SnackBarAction(label: 'Undo', onPressed: store.undo) : null,
-      ),
+    _statusTimer?.cancel();
+    setState(() => status = text);
+    _statusTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) setState(() => status = null);
+    });
+  }
+
+  Widget _withStatus(Widget title) {
+    return Row(
+      children: [
+        Flexible(flex: 3, child: title),
+        const SizedBox(width: 10),
+        Flexible(
+          flex: 2,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: status == null
+                ? const SizedBox.shrink()
+                : Text(
+                    status!,
+                    key: ValueKey(status),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      height: 1.2,
+                      fontWeight: FontWeight.w400,
+                      color: context.colors.dim,
+                    ),
+                  ),
+          ),
+        ),
+      ],
     );
   }
 
   void _done(int n, String label) {
     if (n == 0) {
-      _snack('$label: nothing to change');
+      _say('$label: nothing to change');
     } else {
-      _snack('$label: $n line${n == 1 ? '' : 's'} changed', undo: true);
+      _say('$label: $n line${n == 1 ? '' : 's'} changed');
     }
   }
 
@@ -247,8 +283,12 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<String> get tagNames => [for (final t in store.tags()) t.name];
 
   Future<void> _pickTag() async {
-    final tags = store.tags();
     final active = _activeTag?.toLowerCase();
+    // Only tags on open tasks (plus the one being filtered by, so it can be cleared).
+    final tags = [
+      for (final t in store.tags())
+        if (t.open > 0 || active == '#${t.name.toLowerCase()}') t,
+    ];
     final picked = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
@@ -260,6 +300,92 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     } else {
       filterTag(picked);
     }
+  }
+
+  // ------------------------------------------------------------ views
+
+  /// Shows only what [v] matches in Tasks and Agenda (null: everything).
+  void setView(SavedView? v) {
+    view = v;
+    settings.currentView = v?.name;
+    for (final m in [list, agenda]) {
+      m.filter.setView(v?.filter ?? '');
+      m.refilter();
+    }
+    setState(() => selected = {});
+    if (tab == 2 && v != null) _setTab(0);
+  }
+
+  int _countMatching(String filter) {
+    final f = TaskFilter()
+      ..states = list.filter.states
+      ..setText(filter);
+    var n = 0;
+    for (final file in store.files) {
+      for (final t in file.tasks) {
+        if (f.matches(t)) n++;
+      }
+    }
+    return n;
+  }
+
+  Future<void> _openViews() async {
+    final choice = await showModalBottomSheet<ViewChoice>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => ViewsSheet(views: views, current: view?.name, search: search.text),
+    );
+    if (!mounted || choice == null) return;
+    switch (choice) {
+      case SelectView(:final view):
+        setView(view);
+      case EditView(:final view):
+        await _editView(view);
+      case NewView(:final filter):
+        await _editView(null, filter: filter);
+    }
+  }
+
+  Future<void> _editView(SavedView? original, {String filter = ''}) async {
+    final edit = await showViewEditor(
+      context,
+      initial: original,
+      filter: filter,
+      taken: {
+        for (final v in views)
+          if (v != original) v.name.toLowerCase(),
+      },
+      tags: [
+        for (final t in store.tags())
+          if (t.open > 0) t.name,
+      ],
+      count: _countMatching,
+    );
+    if (!mounted || edit == null) return;
+    final next = [...views];
+    final i = original == null ? -1 : next.indexOf(original);
+    final saved = edit.saved;
+    if (edit.deleted) {
+      if (i >= 0) next.removeAt(i);
+    } else if (saved != null) {
+      if (i >= 0) {
+        next[i] = saved;
+      } else {
+        next.add(saved);
+      }
+    }
+    views = next;
+    settings.views = next;
+    if (edit.deleted) {
+      if (view == original) setView(null);
+      _say('Deleted view "${original!.name}"');
+    } else if (saved != null) {
+      // A new view, or the active one edited: show it. A new one made from
+      // the search box takes the search's place.
+      if (original == null && filter.isNotEmpty && search.text.trim() == filter) setFilter('');
+      if (original == null || view == original) setView(saved);
+    }
+    setState(() {});
   }
 
   void _toggleState(TaskState s) {
@@ -338,7 +464,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final text = bulletList(tasks);
     if (copy) {
       await Clipboard.setData(ClipboardData(text: text));
-      _snack('Copied $n task${n == 1 ? '' : 's'}');
+      _say('Copied $n task${n == 1 ? '' : 's'}');
     } else {
       await shareText(text);
     }
@@ -366,7 +492,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     try {
       _done(actions.replace(tasks, spec.apply), 'Replace');
     } on FormatException catch (e) {
-      _snack('Invalid regular expression: ${e.message}');
+      _say('Invalid regular expression: ${e.message}');
     }
   }
 
@@ -394,7 +520,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (t == null) return;
     setState(() => selected = {});
     final k = actions.addAfter(anchor, t.text, subtask: subtask, due: t.due);
-    if (k != null) _snack(subtask ? 'Subtask added' : 'Task added', undo: true);
+    if (k != null) _say(subtask ? 'Subtask added' : 'Task added');
     _showNew(k);
   }
 
@@ -405,21 +531,21 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final t = await showAddTask(context, tags: tagNames, title: 'New task', where: relPathFor(path, store.roots));
     if (t == null) return;
     final k = actions.append(path, t.text, due: t.due);
-    if (k != null) _snack('Task added', undo: true);
+    if (k != null) _say('Task added');
     if (tab != 0) _setTab(0);
     _showNew(k);
   }
 
   Future<void> _open(Task t) async {
     final err = await openInEditor(t.file.path, t.line + 1);
-    if (err != null) _snack('Could not open ${t.file.relPath}: $err');
+    if (err != null) _say('Could not open ${t.file.relPath}: $err');
   }
 
   void reveal(Task t) {
     _setTab(0);
     final row = list.reveal(t);
     if (row < 0) {
-      _snack('Hidden by the current filter');
+      _say('Hidden by the current filter');
       return;
     }
     _scrollTo(list, listScroll, row);
@@ -509,7 +635,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
               Expanded(child: _NoFolders(onAdd: _openSettings))
             else ...[
               if (tab < 2) _filterBar(),
-              Expanded(child: _body()),
+              Expanded(child: _card(_body())),
             ],
           ],
         ),
@@ -522,19 +648,20 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   PreferredSizeWidget _appBar() {
-    final stats = store.lastLoad;
     return AppBar(
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('todo.md'),
-          if (stats != null && !store.loading)
-            Text(
-              '${store.taskCount} tasks · ${store.files.length} files',
-              style: TextStyle(fontSize: 12, color: context.colors.dim, fontWeight: FontWeight.w400),
-            ),
-        ],
-      ),
+      title: _withStatus(GestureDetector(
+        key: const Key('viewTitle'),
+        behavior: HitTestBehavior.opaque,
+        onTap: _openViews,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(child: Text(view?.name ?? 'todo.md', overflow: TextOverflow.ellipsis)),
+            const SizedBox(width: 2),
+            Icon(Icons.arrow_drop_down, color: context.colors.dim),
+          ],
+        ),
+      )),
       actions: [
         IconButton(
           tooltip: store.canUndo ? 'Undo ${store.undoLabel}' : 'Undo',
@@ -584,7 +711,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final tasks = selectedTasks;
     return AppBar(
       leading: IconButton(tooltip: 'Done selecting', icon: const Icon(Icons.close), onPressed: () => _setSelection({})),
-      title: Text('${selected.length} selected'),
+      title: _withStatus(Text('${selected.length} selected')),
       actions: [
         IconButton(tooltip: 'Select all', icon: const Icon(Icons.select_all), onPressed: _selectAll),
         IconButton(tooltip: 'Share', icon: const Icon(Icons.share_outlined), onPressed: () => _share(tasks)),
@@ -721,7 +848,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
         title: const Text('Filter'),
         content: const SelectableText(
           'Space separated terms, all must match.\n\n'
-          'Words match the task text or file path.\n\n'
+          'Words match the task text or file path.\n'
+          'OR between terms: any of them  (#music OR #video).\n\n'
           'Tags:  #office  (#work also matches #work/admin)\n'
           'ETA:  ~<=15m  ~<1h  ~>2h  ~>=1d  ~30m  ~none  ~any\n'
           'Due:  due:overdue  due:today  due:week  due:none  due:any\n'
@@ -732,11 +860,41 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
+  /// Paper: the content sits in a rounded, bordered card on the window colour.
+  Widget _card(Widget child) {
+    final colors = context.colors;
+    if (!colors.card) return child;
+    final theme = Theme.of(context);
+    final r = BorderRadius.circular(colors.radius + 4);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 2, 10, 10),
+      child: DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          borderRadius: r,
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+        ),
+        child: ClipRRect(
+          borderRadius: r,
+          child: ColoredBox(color: theme.colorScheme.surface, child: child),
+        ),
+      ),
+    );
+  }
+
   Widget _body() {
-    final narrowing = list.filter.narrows;
+    final searching = list.filter.searchNarrows || etaPreset != 0;
     Widget empty(String what) => _Empty(
-      text: narrowing ? 'Nothing matches the filter' : what,
-      action: narrowing ? TextButton(onPressed: () => setFilter(''), child: const Text('Clear filter')) : null,
+      text: searching
+          ? 'Nothing matches the filter'
+          : view != null
+          ? 'Nothing in "${view!.name}"'
+          : what,
+      action: searching
+          ? TextButton(onPressed: () => setFilter(''), child: const Text('Clear filter'))
+          : view != null
+          ? TextButton(onPressed: () => setView(null), child: const Text('Show all tasks'))
+          : null,
     );
     switch (tab) {
       case 0:

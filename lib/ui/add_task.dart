@@ -27,7 +27,7 @@ class Pick extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
           color: selected ? colors.selection : null,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(colors.radius),
           border: Border.all(color: selected ? theme.colorScheme.primary : colors.guide),
         ),
         child: Text(

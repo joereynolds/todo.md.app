@@ -300,12 +300,12 @@ class _Tiles extends StatelessWidget {
         child: Material(
           color: on ? colors.pill : colors.band,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(colors.radius + 2),
             side: on ? BorderSide(color: colors.checkBorder) : BorderSide.none,
           ),
           child: InkWell(
             key: ValueKey('tile-$label'),
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(colors.radius + 2),
             // Nothing to show at 0, unless it's the active filter (tap clears it).
             onTap: filter.isEmpty || (values[i] == 0 && !on) ? null : () => onFilter(on ? '' : filter),
             child: Padding(

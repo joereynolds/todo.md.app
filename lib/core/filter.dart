@@ -6,6 +6,9 @@
 //   due:overdue due:today due:week due:none due:any   (week = next 7 days)
 //   is:todo is:doing is:done is:cancelled is:open
 //   #tag            has that tag, or one under it (#work matches #work/admin)
+// OR (capitals, on its own) between terms gives alternatives: "a b OR c" is
+// (a and b) or c. A saved view's filter (setView) works the same way and is
+// combined with the search box: both must match.
 
 import 'day.dart';
 import 'parser.dart' as parser;
@@ -98,55 +101,117 @@ final _isNames = {
   'open': stateBit(TaskState.todo) | stateBit(TaskState.doing),
 };
 
+/// One alternative of a filter expression: every term must hold.
+class _Clause {
+  final List<String> terms = []; // lower case
+  final List<EtaCond> eta = [];
+  final List<_Due> due = [];
+  final List<String> tags = []; // lower case, without '#'
+  int isMask = 0; // from is: terms, 0 = no constraint
+
+  bool get isEmpty => terms.isEmpty && eta.isEmpty && due.isEmpty && tags.isEmpty && isMask == 0;
+
+  void add(String term) {
+    final c = EtaCond.parse(term);
+    if (c != null) {
+      eta.add(c);
+      return;
+    }
+    final lower = term.toLowerCase();
+    final tag = parser.tagToken(lower);
+    if (tag != null) {
+      tags.add(tag);
+      return;
+    }
+    if (lower.startsWith('due:')) {
+      final d = _dueNames[lower.substring(4)];
+      if (d != null) {
+        due.add(d);
+        return;
+      }
+    } else if (lower.startsWith('is:')) {
+      final bits = _isNames[lower.substring(3)];
+      if (bits != null) {
+        isMask |= bits;
+        return;
+      }
+    }
+    terms.add(lower);
+  }
+
+  bool matches(Task t, Day today) {
+    if (isMask != 0 && isMask & stateBit(t.state) == 0) return false;
+    for (final c in eta) {
+      if (!c.holds(t.eta)) return false;
+    }
+    for (final d in due) {
+      final v = t.due;
+      final ok = switch (d) {
+        _Due.overdue => t.isOpen && v != null && v < today,
+        _Due.today => v == today,
+        _Due.week => v != null && v >= today && v < today + 7,
+        _Due.none => v == null,
+        _Due.any => v != null,
+      };
+      if (!ok) return false;
+    }
+    for (final tag in tags) {
+      if (!hasTag(t, tag)) return false;
+    }
+    for (final term in terms) {
+      if (!t.contentLower.contains(term) && !t.file.relPathLower.contains(term)) return false;
+    }
+    return true;
+  }
+}
+
+/// Clauses joined by OR; empty = no constraint.
+List<_Clause> _parse(String text) {
+  final out = <_Clause>[];
+  var c = _Clause();
+  for (final term in text.split(RegExp(r'\s+'))) {
+    if (term.isEmpty) continue;
+    if (term == 'OR') {
+      if (!c.isEmpty) out.add(c);
+      c = _Clause();
+      continue;
+    }
+    c.add(term);
+  }
+  if (!c.isEmpty) out.add(c);
+  return out;
+}
+
+bool _any(List<_Clause> expr, Task t, Day today) {
+  if (expr.isEmpty) return true;
+  for (final c in expr) {
+    if (c.matches(t, today)) return true;
+  }
+  return false;
+}
+
 class TaskFilter {
-  final List<String> _terms = []; // lower case
-  final List<EtaCond> _textConds = [];
+  List<_Clause> _search = const [];
+  List<_Clause> _view = const [];
   List<EtaCond> _presetConds = const [];
-  final List<_Due> _due = [];
-  final List<String> _tags = []; // lower case, without '#'
-  int _isMask = 0; // from is: terms, 0 = no constraint
   int states = 0xF;
   Day _today = today();
-  String _text = '';
+  String _text = '', _viewText = '';
 
   String get text => _text;
+  String get viewText => _viewText;
 
   void setText(String text) {
     _text = text;
-    _terms.clear();
-    _textConds.clear();
-    _due.clear();
-    _tags.clear();
-    _isMask = 0;
+    _search = _parse(text);
     _today = today();
-    for (final term in text.split(' ')) {
-      if (term.isEmpty) continue;
-      final c = EtaCond.parse(term);
-      if (c != null) {
-        _textConds.add(c);
-        continue;
-      }
-      final lower = term.toLowerCase();
-      final tag = parser.tagToken(lower);
-      if (tag != null) {
-        _tags.add(tag);
-        continue;
-      }
-      if (lower.startsWith('due:')) {
-        final d = _dueNames[lower.substring(4)];
-        if (d != null) {
-          _due.add(d);
-          continue;
-        }
-      } else if (lower.startsWith('is:')) {
-        final bits = _isNames[lower.substring(3)];
-        if (bits != null) {
-          _isMask |= bits;
-          continue;
-        }
-      }
-      _terms.add(lower);
-    }
+  }
+
+  /// The active view's filter ('' for none), combined with [setText]'s.
+  void setView(String text) {
+    _viewText = text;
+    _view = _parse(text);
+    _today = today();
   }
 
   void setStateVisible(TaskState s, bool visible) {
@@ -158,42 +223,18 @@ class TaskFilter {
   set etaPreset(List<EtaCond> conds) => _presetConds = conds;
 
   /// True when terms or ETA conditions narrow the result (state toggles aside).
-  bool get narrows =>
-      _terms.isNotEmpty ||
-      _textConds.isNotEmpty ||
-      _presetConds.isNotEmpty ||
-      _due.isNotEmpty ||
-      _tags.isNotEmpty ||
-      _isMask != 0;
+  bool get narrows => _search.isNotEmpty || _view.isNotEmpty || _presetConds.isNotEmpty;
+
+  /// The search box narrows (not counting the view or the ETA preset).
+  bool get searchNarrows => _search.isNotEmpty;
 
   bool get showsEverything => states == 0xF && !narrows;
 
   bool matches(Task t) {
-    final bit = stateBit(t.state);
-    if (states & bit == 0 || (_isMask != 0 && _isMask & bit == 0)) return false;
+    if (states & stateBit(t.state) == 0) return false;
     for (final c in _presetConds) {
       if (!c.holds(t.eta)) return false;
     }
-    for (final c in _textConds) {
-      if (!c.holds(t.eta)) return false;
-    }
-    for (final d in _due) {
-      final due = t.due;
-      final ok = switch (d) {
-        _Due.overdue => t.isOpen && due != null && due < _today,
-        _Due.today => due == _today,
-        _Due.week => due != null && due >= _today && due < _today + 7,
-        _Due.none => due == null,
-        _Due.any => due != null,
-      };
-      if (!ok) return false;
-    }
-    for (final tag in _tags) {
-      if (!hasTag(t, tag)) return false;
-    }
-    for (final term in _terms) {
-      if (!t.contentLower.contains(term) && !t.file.relPathLower.contains(term)) return false;
-    }
-    return true;
+    return _any(_view, t, _today) && _any(_search, t, _today);
   }
 }

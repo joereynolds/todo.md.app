@@ -209,6 +209,20 @@ void main() {
     expect(run('a.md thing'), ['Done thing']); // path or content
     expect(run('', states: 0x3), ['Wash', 'Movie', 'Later']);
     expect(EtaCond.parse('~bad'), isNull);
+
+    // OR between terms; lower-case "or" is a plain word.
+    expect(run('due:overdue OR due:today'), ['Wash', 'Movie']);
+    expect(run('is:open ~<=15m OR later'), ['Wash', 'Later']);
+    expect(run('OR wash OR'), ['Wash']);
+    expect(run('wash or'), isEmpty);
+    // A view combines with the search box: both must match.
+    final flt = TaskFilter()..setView('due:overdue OR due:today');
+    flt.setText('movie');
+    expect([for (final t in f.tasks) if (flt.matches(t)) t.text], ['Movie']);
+    flt.setText('');
+    expect([for (final t in f.tasks) if (flt.matches(t)) t.text], ['Wash', 'Movie']);
+    expect(flt.narrows, isTrue);
+    expect(flt.searchNarrows, isFalse);
   });
 
   test('tags', () {

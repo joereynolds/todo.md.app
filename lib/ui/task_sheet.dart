@@ -155,7 +155,7 @@ class _TaskSheetState extends State<TaskSheet> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(4),
+                            borderRadius: BorderRadius.circular(colors.radius),
                             border: Border.all(color: colors.guide),
                           ),
                           child: Text('+ Tag', style: TextStyle(fontSize: 13, color: colors.pillText)),

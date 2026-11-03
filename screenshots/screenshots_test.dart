@@ -81,6 +81,7 @@ void main() {
       'view/theme': theme,
       'view/tab': tab,
       'filter/states': states,
+      'views/list': '[{"name":"This week","filter":"due:overdue OR due:week"},{"name":"Home","filter":"#home OR #admin"}]',
     });
     final settings = await Settings.load();
     store = TaskStore()..watching = false;
@@ -95,7 +96,7 @@ void main() {
 
   Future<void> shot(String name) => expectLater(find.byType(MaterialApp), matchesGoldenFile('out/$name.png'));
 
-  for (final theme in ['light', 'soft', 'dark']) {
+  for (final theme in ['light', 'soft', 'dark', 'clean', 'midnight', 'paper']) {
     testWidgets('tasks $theme', (tester) async {
       await boot(tester, theme, states: 0xF);
       await shot('tasks-$theme');
@@ -138,5 +139,25 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('due-Tomorrow')));
     await tester.pumpAndSettle();
     await shot('add-light');
+  });
+
+  testWidgets('views', (tester) async {
+    await boot(tester, 'light');
+    await tester.tap(find.byKey(const Key('viewTitle')));
+    await tester.pumpAndSettle();
+    await shot('views-light');
+    await tester.tap(find.byKey(const ValueKey('editView-Home')));
+    await tester.pumpAndSettle();
+    await shot('view-edit-light');
+  });
+
+  testWidgets('status', (tester) async {
+    await boot(tester, 'light');
+    final t = tester.getRect(find.text('Take bins out'));
+    await tester.tapAt(Offset(t.left - 15, t.center.dy + 6)); // its checkbox
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300)); // the fade-in
+    await shot('status-light');
+    await tester.pump(const Duration(seconds: 5));
   });
 }

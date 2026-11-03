@@ -46,7 +46,7 @@ class TagPill extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: selected ? colors.selection : null,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(colors.radius),
         border: Border.all(color: selected ? colors.tag : colors.guide),
       ),
       child: Row(
