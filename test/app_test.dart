@@ -12,6 +12,7 @@ import 'package:todomd/core/task.dart';
 import 'package:todomd/main.dart';
 import 'package:todomd/ui/dialogs.dart';
 import 'package:todomd/ui/help_page.dart';
+import 'package:todomd/ui/templates_page.dart';
 import 'package:todomd/ui/home.dart';
 import 'package:todomd/ui/settings.dart';
 import 'package:todomd/ui/task_list.dart';
@@ -54,6 +55,18 @@ Offset checkbox(WidgetTester tester, String text) {
   final r = tester.getRect(row);
   final t = tester.getRect(rowText(text));
   return Offset(t.left - 19, r.center.dy); // the checkbox sits just left of the text
+}
+
+/// The template page's own store loads in an isolate; let it finish.
+Future<void> templateLoaded(WidgetTester tester) async {
+  await tester.pumpAndSettle();
+  for (var i = 0; i < 100; i++) {
+    final st = tester.state(find.byType(TemplateEditorPage)) as dynamic;
+    if (!(st.store as TaskStore).loading) break;
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+    await tester.pump();
+  }
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -448,6 +461,110 @@ void main() {
     await tester.pumpAndSettle();
     expect(home.search.text, 'due:today');
     expect(find.byType(HelpPage), findsNothing); // back on the list
+  });
+
+  testWidgets('templates: save from a selection, insert (todo.md, below, as subtasks), edit, rename, delete',
+      (tester) async {
+    final home = await boot(tester, data: '- [x] Pack x2026-10-01 #trip\n  - [ ] Passport ~5m !2026-11-02\n- [ ] Holiday\n');
+    final dir = '${tmp.path}/.templates';
+
+    // Save "Pack" (with its subtask) as a template.
+    home.selected = {keyOf(store.files.first.tasks.first)};
+    home.setFilter('');
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(PopupMenuButton<String>).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save as template…'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('promptField')), 'Trip');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(File('$dir/Trip.md').readAsStringSync(), '- [ ] Pack #trip\n  - [ ] Passport ~5m\n');
+    expect(home.selected, isEmpty);
+    expect(home.list.rows.where((r) => r.task != null).length, 3); // nothing from .templates (it isn't scanned)
+
+    // + → Template… → into todo.md; the new tasks end up selected.
+    await tester.tap(find.byTooltip('Add task'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('addFromTemplate')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('pickTemplate-Trip')));
+    await tester.pumpAndSettle();
+    expect(File('${tmp.path}/todo.md').readAsStringSync(), '- [ ] Pack #trip +$today\n  - [ ] Passport ~5m +$today\n');
+    expect(home.selected.length, 2);
+    home.selected = {};
+
+    // Task sheet → Insert template… → as subtasks of "Holiday".
+    home.setFilter('');
+    await tester.pumpAndSettle();
+    await tester.tap(rowText('Holiday'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('sheet-template')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tplSubtasks')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('pickTemplate-Trip')));
+    await tester.pumpAndSettle();
+    expect(
+      contents(),
+      '- [x] Pack x2026-10-01 #trip\n  - [ ] Passport ~5m !2026-11-02\n- [ ] Holiday\n'
+      '  - [ ] Pack #trip +$today\n    - [ ] Passport ~5m +$today\n',
+    );
+    store.undo(); // one step
+    await tester.pumpAndSettle();
+    expect(contents(), '- [x] Pack x2026-10-01 #trip\n  - [ ] Passport ~5m !2026-11-02\n- [ ] Holiday\n');
+    home.selected = {};
+    home.setFilter('');
+    await tester.pumpAndSettle();
+
+    // ⋮ → Templates: a template opens as a task list; edit, add, rename, delete.
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Templates'));
+    await tester.pumpAndSettle();
+    expect(find.text('2 tasks'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('template-Trip')));
+    await templateLoaded(tester);
+    expect(rowText('Pack'), findsOneWidget);
+    expect(rowText('Passport'), findsOneWidget);
+    // + adds a task (no created date in a template); tap → sheet → ETA etc. as usual.
+    await tester.tap(find.byKey(const Key('addTemplateTask')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('addText')), 'Book train');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('addSubmit')));
+    await tester.pumpAndSettle();
+    expect(File('$dir/Trip.md').readAsStringSync(), '- [ ] Pack #trip\n  - [ ] Passport ~5m\n- [ ] Book train\n');
+    await tester.tap(rowText('Passport'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('sheet-template')), findsNothing); // not here
+    await tester.tap(find.byKey(const ValueKey('sheet-delete')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete').last);
+    await tester.pumpAndSettle();
+    expect(File('$dir/Trip.md').readAsStringSync(), '- [ ] Pack #trip\n- [ ] Book train\n');
+    await tester.tap(find.byTooltip('Undo Delete'));
+    await tester.pumpAndSettle();
+    expect(File('$dir/Trip.md').readAsStringSync(), '- [ ] Pack #trip\n  - [ ] Passport ~5m\n- [ ] Book train\n');
+
+    // Rename (tap the title), then delete the template.
+    await tester.tap(find.byKey(const Key('templateTitle')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('promptField')), 'Weekend trip');
+    await tester.tap(find.text('Rename'));
+    await tester.pump();
+    await templateLoaded(tester);
+    expect(File('$dir/Trip.md').existsSync(), isFalse);
+    expect(File('$dir/Weekend trip.md').existsSync(), isTrue);
+    expect(rowText('Book train'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('templateMenu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete template'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete').last);
+    await tester.pumpAndSettle();
+    expect(File('$dir/Weekend trip.md').existsSync(), isFalse);
+    expect(find.textContaining('No templates yet'), findsOneWidget);
   });
 
   testWidgets('calendar: day list, tile filters, reveal in Tasks', (tester) async {

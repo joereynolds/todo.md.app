@@ -87,6 +87,21 @@ const _sections = <(IconData, String, List<String>)>[
     ],
   ),
   (
+    Icons.content_paste_outlined,
+    'Templates',
+    [
+      'A template is a set of tasks you use again and again: a packing list, a weekly review, the steps of a '
+          'routine job. Inserting one adds fresh copies of its tasks, all to do.',
+      'Make one by selecting tasks and choosing "Save as template" from the ⋮ menu (subtasks come too, dates are '
+          'dropped), or write one in Menu → Templates.',
+      'Insert one from a task ("Insert template…": below it, or as its subtasks) or from the + button '
+          '("Template…", into `todo.md`). The new tasks are selected afterwards, so you can give them all a due '
+          'date in one go.',
+      'Templates are plain files in a hidden `.templates` folder in your notes, shared with the desktop app. A due '
+          'date written in a template is kept; estimates and tags are too.',
+    ],
+  ),
+  (
     Icons.undo,
     'Undo and messages',
     [

@@ -375,6 +375,14 @@ String setState(String line, TaskState state, Day today) {
   return prefix + content;
 }
 
+/// Removes the date tokens of the given kinds ("!+x-": due, created, done,
+/// cancelled).
+String removeDates(String line, String kinds) {
+  final tl = splitTaskLine(line);
+  if (tl == null) return line;
+  return line.substring(0, tl.prefixLen) + _removeTokens(line.substring(tl.prefixLen), _dateKinds(kinds));
+}
+
 /// A null due removes it.
 String setDue(String line, Day? due) {
   final tl = splitTaskLine(line);

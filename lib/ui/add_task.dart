@@ -127,18 +127,20 @@ Future<NewTask?> showAddTask(
   required String where,
   Day? due,
   List<String> tags = const [],
+  VoidCallback? onTemplate, // shows "From a template…"; called after the sheet closes
 }) {
   return showModalBottomSheet<NewTask>(
     context: context,
     isScrollControlled: true,
-    builder: (_) => _AddTaskSheet(title: title, where: where, due: due, tags: tags),
+    builder: (_) => _AddTaskSheet(title: title, where: where, due: due, tags: tags, onTemplate: onTemplate),
   );
 }
 
 class _AddTaskSheet extends StatefulWidget {
-  const _AddTaskSheet({required this.title, required this.where, this.due, this.tags = const []});
+  const _AddTaskSheet({required this.title, required this.where, this.due, this.tags = const [], this.onTemplate});
   final String title, where;
   final List<String> tags;
+  final VoidCallback? onTemplate;
   final Day? due;
 
   @override
@@ -208,6 +210,18 @@ class _AddTaskSheetState extends State<_AddTaskSheet> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  if (widget.onTemplate != null) ...[
+                    TextButton.icon(
+                      key: const Key('addFromTemplate'),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        widget.onTemplate!();
+                      },
+                      icon: const Icon(Icons.content_paste_outlined, size: 18),
+                      label: const Text('Template…'),
+                    ),
+                    const Spacer(),
+                  ],
                   TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
                   const SizedBox(width: 6),
                   ListenableBuilder(

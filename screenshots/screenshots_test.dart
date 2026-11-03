@@ -37,6 +37,14 @@ const notes = {
 - [ ] Plan next sprint !2026-11-04
 - [x] Ship 0.1.0 x2026-10-31
 ''',
+  '.templates/Packing list.md': '''- [ ] Pack #trip
+  - [ ] Passport ~5m
+  - [ ] Chargers
+- [ ] Book the train
+''',
+  '.templates/Weekly review.md': '''- [ ] Clear the inbox ~15m
+- [ ] Plan next week ~30m
+''',
   'work/ideas.md': '''- [ ] Weekly view for the agenda ~1w
 - [ ] Recurring tasks
 ''',
@@ -201,5 +209,22 @@ void main() {
       await boot(tester, 'midnight', tab: 2);
       await shot('readme-calendar');
     });
+  });
+
+  testWidgets('templates', (tester) async {
+    await boot(tester, 'light');
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Templates'));
+    await tester.pumpAndSettle();
+    await shot('templates-light');
+    await tester.tap(find.text('Packing list'));
+    await tester.pumpAndSettle();
+    for (var i = 0; i < 100 && find.text('Passport').evaluate().isEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    await shot('template-edit-light');
   });
 }

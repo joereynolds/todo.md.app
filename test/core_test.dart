@@ -6,6 +6,7 @@ import 'package:todomd/core/edits.dart';
 import 'package:todomd/core/filter.dart';
 import 'package:todomd/core/parser.dart' as parser;
 import 'package:todomd/core/task.dart';
+import 'package:todomd/core/templates.dart';
 
 TaskFile parse(String s) => parser.parse('/a.md', 'a.md', s);
 
@@ -287,6 +288,35 @@ void main() {
     expect(parser.addTag('- [ ] a ', 'b'), '- [ ] a #b');
     expect(parser.addTag('- [ ] a', 'bad tag'), '- [ ] a'); // not a tag
     expect(parser.addTag('- [ ] a', '42'), '- [ ] a');
+  });
+
+  test('templates: save from tasks, instantiate', () {
+    todayFn = () => dayOf(2026, 10, 31);
+    addTearDown(() => todayFn = () => dayFromDate(DateTime.now()));
+    final f = parse(
+      '- [x] Pack x2026-10-01 +2026-09-01\n'
+      '    - [/] Passport !2026-11-02 ~5m #travel\n'
+      '    - [-] Snacks -2026-10-02\n'
+      '- [ ] Other\n',
+    );
+    // The first three: state reset, dates gone, ETA and tag kept, 2-space nesting.
+    expect(templateFromTasks(f.tasks.take(3).toList()), [
+      '- [ ] Pack',
+      '  - [ ] Passport ~5m #travel',
+      '  - [ ] Snacks',
+    ]);
+    // A subtask without its parent comes out top level.
+    expect(templateFromTasks([f.tasks[1]]), ['- [ ] Passport ~5m #travel']);
+
+    const data = '# Trip\n\n- [x] Pack +2020-01-01 x2020-01-02\n  - [ ] Passport !2026-11-02\nsome note\n';
+    expect(instantiateTemplate(data, lead: '\t', unit: '\t', today: today()), [
+      '\t- [ ] Pack +2026-10-31',
+      '\t\t- [ ] Passport !2026-11-02 +2026-10-31', // a written due is kept
+    ]);
+    expect(isValidTemplateName('Trip'), isTrue);
+    for (final bad in ['', ' ', '.hidden', 'a/b', r'a\b']) {
+      expect(isValidTemplateName(bad), isFalse, reason: bad);
+    }
   });
 
   test('addMonths clamps', () {

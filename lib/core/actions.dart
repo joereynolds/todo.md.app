@@ -6,6 +6,7 @@ import 'edits.dart';
 import 'parser.dart' as parser;
 import 'store.dart';
 import 'task.dart';
+import 'templates.dart';
 
 const stateLabels = {
   TaskState.todo: 'Mark todo',
@@ -73,17 +74,20 @@ String indentUnit(TaskFile f) {
 }
 
 class TaskActions {
-  TaskActions(this.store);
+  TaskActions(this.store, {this.stampCreated = true});
   final TaskStore store;
+
+  /// New tasks get +today (off for templates, where inserting adds it).
+  final bool stampCreated;
 
   int _run(List<Edit> edits, String label) => store.apply(edits, label);
 
   Edit _line(Task t, String after) => Edit(t.file.path, t.line, [t.raw], [after]);
 
   /// A new task line: the picked due date (replacing a typed one) and +today.
-  static String _newLine(String line, Day? due) {
+  String _newLine(String line, Day? due) {
     if (due != null) line = parser.setDue(line, due);
-    return parser.setCreated(line, today());
+    return stampCreated ? parser.setCreated(line, today()) : line;
   }
 
   /// Where new top-level tasks go: todo.md in the first folder.
@@ -190,5 +194,41 @@ class TaskActions {
     if (n == 0) return null;
     final f = store.fileByPath(path);
     return f == null || f.tasks.isEmpty ? null : (path: path, line: f.tasks.last.line);
+  }
+
+  /// Inserts the tasks of a template (its file's text): after [anchor]'s
+  /// subtree at its level, or as its last subtasks, or (no anchor) at the end
+  /// of [path]. Re-indented with the file's indent unit, all todo, created
+  /// today. Returns the keys of the new tasks (empty if nothing was written).
+  List<LineKey> insertTemplate(String name, String data, {Task? anchor, bool asSubtasks = false, String? path}) {
+    final now = today();
+    if (anchor != null) {
+      final file = anchor.file;
+      final unit = indentUnit(file);
+      var lead = parser.leadingWhitespace(anchor.prefix);
+      if (asSubtasks) {
+        lead = anchor.children.isEmpty ? lead + unit : parser.leadingWhitespace(anchor.children.first.prefix);
+      }
+      final lines = instantiateTemplate(data, lead: lead, unit: unit, today: now);
+      if (lines.isEmpty) return [];
+      final after = lastDescendant(anchor);
+      final n = _run([
+        Edit(file.path, after.line, [after.raw], [after.raw, ...lines]),
+      ], 'Insert "$name"');
+      return n == 0 ? [] : [for (var i = 0; i < lines.length; i++) (path: file.path, line: after.line + 1 + i)];
+    }
+    final target = path ?? inboxPath;
+    final existing = store.fileByPath(target);
+    final unit = existing == null ? '  ' : indentUnit(existing);
+    final lines = instantiateTemplate(data, lead: '', unit: unit, today: now);
+    if (lines.isEmpty) return [];
+    store.createFile(target);
+    final before = store.fileByPath(target)?.tasks.length ?? 0;
+    final n = _run([
+      Edit(target, -1, [], lines),
+    ], 'Insert "$name"');
+    final f = store.fileByPath(target);
+    if (n == 0 || f == null) return [];
+    return [for (final t in f.tasks.skip(before)) (path: target, line: t.line)];
   }
 }

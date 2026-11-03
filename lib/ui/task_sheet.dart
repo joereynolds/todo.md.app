@@ -11,7 +11,7 @@ import '../core/task.dart';
 import 'tags.dart';
 import 'theme.dart';
 
-enum SheetAction { due, eta, addBelow, addSubtask, open, delete, select }
+enum SheetAction { due, eta, addBelow, addSubtask, template, open, delete, select }
 
 class TaskSheet extends StatefulWidget {
   const TaskSheet({
@@ -25,6 +25,7 @@ class TaskSheet extends StatefulWidget {
     this.onTag,
     this.onAddTag,
     this.onRemoveTag,
+    this.hidden = const {},
   });
 
   final TaskStore store;
@@ -35,6 +36,7 @@ class TaskSheet extends StatefulWidget {
   final ValueChanged<SheetAction> onAction;
   final ValueChanged<String>? onTag; // show everything with this tag
   final ValueChanged<String>? onAddTag, onRemoveTag; // these keep the sheet open
+  final Set<SheetAction> hidden; // actions that don't apply here (a template's tasks)
 
   @override
   State<TaskSheet> createState() => _TaskSheetState();
@@ -85,14 +87,17 @@ class _TaskSheetState extends State<TaskSheet> {
     final theme = Theme.of(context);
     final colors = context.colors;
     final subs = t.children.isEmpty ? '' : ' (and ${t.subTotal} subtask${t.subTotal == 1 ? '' : 's'})';
-    Widget action(IconData icon, String label, SheetAction a, {String? detail, Color? color}) => ListTile(
-      key: ValueKey('sheet-${a.name}'),
-      dense: true,
-      leading: Icon(icon, color: color),
-      title: Text(label, style: TextStyle(color: color)),
-      subtitle: detail == null ? null : Text(detail),
-      onTap: () => widget.onAction(a),
-    );
+    Widget action(IconData icon, String label, SheetAction a, {String? detail, Color? color}) =>
+        widget.hidden.contains(a)
+        ? const SizedBox.shrink()
+        : ListTile(
+            key: ValueKey('sheet-${a.name}'),
+            dense: true,
+            leading: Icon(icon, color: color),
+            title: Text(label, style: TextStyle(color: color)),
+            subtitle: detail == null ? null : Text(detail),
+            onTap: () => widget.onAction(a),
+          );
 
     return SafeArea(
       child: Padding(
@@ -188,6 +193,7 @@ class _TaskSheetState extends State<TaskSheet> {
               action(Icons.timer_outlined, 'ETA', SheetAction.eta, detail: t.eta > 0 ? '~${t.etaText}' : 'None'),
               action(Icons.add, 'Add task below', SheetAction.addBelow),
               action(Icons.subdirectory_arrow_right, 'Add subtask', SheetAction.addSubtask),
+              action(Icons.content_paste_outlined, 'Insert template…', SheetAction.template),
               action(Icons.checklist, 'Select', SheetAction.select, detail: 'Then tap or drag to select more'),
               action(Icons.open_in_new, 'Open file', SheetAction.open),
               action(Icons.delete_outline, 'Delete', SheetAction.delete, color: colors.overdue),

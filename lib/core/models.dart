@@ -46,6 +46,16 @@ abstract class FlatModel extends ChangeNotifier {
   final Set<String> _tempCollapsed = {}; // while the filter narrows
   bool _all = true;
 
+  /// Without headers (a template's own list), groups just run on and can't
+  /// be collapsed; tasks keep depth 1 and up.
+  bool get showHeaders => _showHeaders;
+  bool _showHeaders = true;
+  set showHeaders(bool v) {
+    if (v == _showHeaders) return;
+    _showHeaders = v;
+    reset();
+  }
+
   /// Called when the persistent collapse state changes.
   void Function(List<String> keys)? onCollapsedChanged;
 
@@ -102,8 +112,8 @@ abstract class FlatModel extends ChangeNotifier {
   void _appendGroupRows(int g, List<ListRow> out) {
     final group = groups[g];
     final mark = out.length;
-    final open = !_isCollapsed(group.key);
-    out.add(ListRow(null, g, 0, false, open));
+    final open = !_showHeaders || !_isCollapsed(group.key);
+    if (_showHeaders) out.add(ListRow(null, g, 0, false, open));
     var any = false;
     for (final t in group.roots) {
       any |= _appendTask(t, g, 1, !open, out);
@@ -112,7 +122,7 @@ abstract class FlatModel extends ChangeNotifier {
       out.length = mark;
       return;
     }
-    out[mark].hasChildren = any;
+    if (_showHeaders) out[mark].hasChildren = any;
   }
 
   // Appends t and its visible descendants (unless `hidden`, under a collapsed
@@ -296,6 +306,20 @@ class TaskListModel extends FlatModel {
       reset();
     }
     return t.listRow;
+  }
+}
+
+/// The tasks of one file (a template), without a header row.
+class FileModel extends TaskListModel {
+  FileModel(super.store, this.path) {
+    showHeaders = false;
+  }
+  String path;
+
+  @override
+  void collectGroups(List<Group> out) {
+    final f = store.fileByPath(path);
+    if (f != null) out.add(Group(f.path, file: f)..roots.addAll(f.roots));
   }
 }
 

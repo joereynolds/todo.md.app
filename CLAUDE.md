@@ -12,7 +12,7 @@ app's own folder). Linux desktop is enabled for development only.
 ## Build / run / test
 
 ```sh
-flutter test                          # core, store/models, widget tests (45)
+flutter test                          # core, store/models, widget tests (47)
 flutter analyze
 flutter test benchmark/               # 200k tasks / 5,000 files, JIT timings
 BENCH_DIR=~/notes flutter test benchmark/
@@ -55,6 +55,7 @@ search box is debounced 150 ms.
 | `lib/ui/task_sheet.dart`, `dialogs.dart`, `add_task.dart`, `tags.dart` | Task sheet; due, ETA, replace, prompts; add-task sheet, `DueRow`, `Pick`; tag pills, tag list, suggestions, picker. |
 | `lib/ui/theme.dart`, `settings.dart`, `settings_page.dart` | Light/Soft/Dark/System and the desktop's Clean/Midnight/Paper (same tokens; accent colours in-progress; Midnight's pill tabs = nav-bar pill; Paper's card = `TaskColors.card`, `_card` in home; no roomier rows, they stay 48 px) + `TaskColors`; SharedPreferences (same keys as the desktop QSettings, plus `SavedView`s); folders page. |
 | `lib/ui/views.dart` | Views sheet (switch) and view editor. |
+| `lib/core/templates.dart`, `lib/ui/templates_page.dart` | Templates: dir, names, save/instantiate; list page, editor, picker. |
 | `lib/ui/help_page.dart`, `filter_help.dart` | ⋮ → Help (how the app works, plain words; keep it in step with features), and the search box's ? sheet (examples tap to apply). |
 | `lib/ui/platform.dart` + `MainActivity.kt` | Storage access over the `todomd/storage` channel, folder picker, open file. |
 
@@ -151,6 +152,26 @@ ancestors (`actions.bulletList`). Clears the selection.
 days (today included). Tasks they match show **even with the Done state toggle off**
 (asking for finished tasks implies it); everything else still follows the toggles.
 The calendar's "done today" tile uses `done:today` (it used to do nothing).
+
+## Templates (as the desktop: `src/templates.*`)
+
+`lib/core/templates.dart` ports the desktop's rules and file format, so both apps share
+`.templates/` (first root that has one, else the first root; hidden, so never scanned):
+`templateFromTasks` (save: todo, all dates removed, ETAs/tags kept, 2 spaces per selected
+ancestor), `instantiateTemplate` (insert: todo, `+today`, other dates dropped except a
+written `!due`, re-indented with the file's unit). `TaskActions.insertTemplate` is one
+undoable edit (after the anchor's subtree, as its last subtasks, or appended to todo.md).
+Mobile UI (`lib/ui/templates_page.dart`): ⋮ → Templates lists them (+ = new, empty
+file); tapping one opens it as an **ordinary task list** (the user asked for that, not a
+text editor): `TemplateEditorPage` has its own `TaskStore` rooted at `.templates` (like
+the desktop's `m_templateStore`), a `FileModel` (one file, `showHeaders = false`), and
+`TaskActions(stampCreated: false)` (no `+date` in templates). Tap = the usual task sheet
+minus template/open/select (`TaskSheet.hidden`); tick, swipe, + add, undo/redo all work.
+Title tap = rename (a plain file rename, so case-only renames work on Android's
+case-insensitive storage); ⋮ = insert into tasks, rename, delete. Selection ⋮ →
+"Save as template…" (selected + subtasks), task sheet → "Insert template…" (below / as
+subtasks), add sheet → "Template…" (into todo.md). Inserted tasks end up selected.
+Template file writes are plain file IO (not undoable), as on the desktop.
 
 ## Not done yet
 

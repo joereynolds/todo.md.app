@@ -3,6 +3,7 @@
 // Mirrors src/mainwindow.cpp.
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,6 +14,7 @@ import '../core/filter.dart';
 import '../core/models.dart';
 import '../core/store.dart';
 import '../core/task.dart';
+import '../core/templates.dart';
 import 'calendar.dart';
 import 'add_task.dart';
 import 'dialogs.dart';
@@ -24,6 +26,7 @@ import 'settings_page.dart';
 import 'task_list.dart';
 import 'tags.dart';
 import 'task_sheet.dart';
+import 'templates_page.dart';
 import 'theme.dart';
 import 'views.dart';
 
@@ -530,12 +533,105 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Future<void> addTopLevel() async {
     if (store.roots.isEmpty) return _openSettings();
     final path = actions.inboxPath;
-    final t = await showAddTask(context, tags: tagNames, title: 'New task', where: relPathFor(path, store.roots));
+    final t = await showAddTask(
+      context,
+      tags: tagNames,
+      title: 'New task',
+      where: relPathFor(path, store.roots),
+      onTemplate: () => _pickAndInsert(null),
+    );
     if (t == null) return;
     final k = actions.append(path, t.text, due: t.due);
     if (k != null) _say('Task added');
     if (tab != 0) _setTab(0);
     _showNew(k);
+  }
+
+  // ------------------------------------------------------------ templates
+
+  String? get _templatesDir => templatesDir(store.roots);
+
+  void _openTemplates() {
+    final dir = _templatesDir;
+    if (dir == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => TemplatesPage(dir: dir, tags: tagNames, onInsert: (n) => insertTemplate(n)),
+      ),
+    );
+  }
+
+  /// Inserts template [name]: after [anchor] (or as its subtasks), else at the
+  /// end of todo.md. The new tasks end up selected, so a due date or ETA can be
+  /// set on all of them at once.
+  void insertTemplate(String name, {Task? anchor, bool subtasks = false}) {
+    final dir = _templatesDir;
+    if (dir == null) return;
+    final String data;
+    try {
+      data = File(templatePath(dir, name)).readAsStringSync();
+    } on FileSystemException {
+      _say('Template "$name" not found');
+      return;
+    }
+    final keys = actions.insertTemplate(name, data, anchor: anchor, asSubtasks: subtasks);
+    if (keys.isEmpty) {
+      _say('"$name" has no tasks to insert');
+      return;
+    }
+    if (tab != 0) _setTab(0);
+    final first = store.taskFor(keys.first);
+    if (first != null) _scrollTo(list, listScroll, list.reveal(first));
+    setState(() => selected = keys.toSet());
+    _say('Inserted "$name": ${keys.length} task${keys.length == 1 ? '' : 's'}');
+  }
+
+  Future<void> _pickAndInsert(Task? anchor) async {
+    final dir = _templatesDir;
+    if (dir == null) return;
+    final key = anchor == null ? null : keyOf(anchor);
+    final choice = await pickTemplate(context, dir: dir, under: anchor?.text);
+    if (choice == null || !mounted) return;
+    final fresh = key == null ? null : store.taskFor(key);
+    if (key != null && fresh == null) return; // gone meanwhile
+    insertTemplate(choice.name, anchor: fresh, subtasks: choice.subtasks);
+  }
+
+  /// The selected tasks and their subtasks as a new template.
+  Future<void> _saveAsTemplate(List<Task> tasks) async {
+    final dir = _templatesDir;
+    if (dir == null || tasks.isEmpty) return;
+    final all = expand(tasks);
+    final name = (await promptText(
+      context,
+      title: 'Save as template',
+      message: '${all.length} task${all.length == 1 ? '' : 's'} (with subtasks), reset to todo, dates removed.',
+      initial: all.first.text,
+      hint: 'Template name',
+      action: 'Save',
+    ))?.trim();
+    if (name == null || name.isEmpty || !mounted) return;
+    if (!isValidTemplateName(name)) {
+      _say('"$name" can\'t be a template name');
+      return;
+    }
+    final path = templatePath(dir, name);
+    if (File(path).existsSync()) {
+      final ok = await confirm(
+        context,
+        'Replace template',
+        'There is already a template called "$name". Replace it?',
+        action: 'Replace',
+      );
+      if (!ok || !mounted) return;
+    }
+    if (!saveTemplate(path, templateFromTasks(all))) {
+      _say('Could not write $path');
+      return;
+    }
+    setState(() => selected = {});
+    _say('Saved template "$name"');
   }
 
   Future<void> _open(Task t) async {
@@ -603,6 +699,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 _delete([t]);
               case SheetAction.select:
                 _setSelection({key});
+              case SheetAction.template:
+                _pickAndInsert(t);
             }
           },
         );
@@ -665,19 +763,21 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   PreferredSizeWidget _appBar() {
     return AppBar(
-      title: _withStatus(GestureDetector(
-        key: const Key('viewTitle'),
-        behavior: HitTestBehavior.opaque,
-        onTap: _openViews,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(child: Text(view?.name ?? 'todo.md', overflow: TextOverflow.ellipsis)),
-            const SizedBox(width: 2),
-            Icon(Icons.arrow_drop_down, color: context.colors.dim),
-          ],
+      title: _withStatus(
+        GestureDetector(
+          key: const Key('viewTitle'),
+          behavior: HitTestBehavior.opaque,
+          onTap: _openViews,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(child: Text(view?.name ?? 'todo.md', overflow: TextOverflow.ellipsis)),
+              const SizedBox(width: 2),
+              Icon(Icons.arrow_drop_down, color: context.colors.dim),
+            ],
+          ),
         ),
-      )),
+      ),
       actions: [
         IconButton(
           tooltip: store.canUndo ? 'Undo ${store.undoLabel}' : 'Undo',
@@ -708,6 +808,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 _openSettings();
               case 'help':
                 _openHelp();
+              case 'templates':
+                _openTemplates();
             }
           },
           itemBuilder: (_) => [
@@ -718,6 +820,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
               CheckedPopupMenuItem(value: 'empty', checked: agenda.showEmptyDays, child: const Text('Show empty days')),
             const PopupMenuItem(value: 'reload', child: Text('Reload')),
             const PopupMenuDivider(),
+            if (store.roots.isNotEmpty) const PopupMenuItem(value: 'templates', child: Text('Templates')),
             const PopupMenuItem(value: 'settings', child: Text('Folders & theme')),
             const PopupMenuItem(value: 'help', child: Text('Help')),
           ],
@@ -750,9 +853,12 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 _add(tasks.first, subtask: false);
               case 'open':
                 _open(tasks.first);
+              case 'saveTemplate':
+                _saveAsTemplate(tasks);
             }
           },
           itemBuilder: (_) => [
+            const PopupMenuItem(value: 'saveTemplate', child: Text('Save as template…')),
             const PopupMenuItem(value: 'replace', child: Text('Replace text…')),
             const PopupMenuItem(value: 'clearDue', child: Text('Clear due date')),
             const PopupMenuItem(value: 'clearEta', child: Text('Clear ETA')),
