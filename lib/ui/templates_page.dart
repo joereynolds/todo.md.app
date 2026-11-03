@@ -160,8 +160,8 @@ class _TemplatesPageState extends State<TemplatesPage> {
   }
 }
 
-/// One template's tasks, as a task list: tap a task for its sheet, tick and
-/// swipe as anywhere, + adds a task, undo/redo. Pops with the template's name
+/// One template's tasks, as a task list: tap a task for its sheet, tick as
+/// anywhere, + adds a task, undo/redo. Pops with the template's name
 /// when "Insert into tasks" is chosen, else null.
 class TemplateEditorPage extends StatefulWidget {
   const TemplateEditorPage({super.key, required this.dir, required this.name, this.tags = const []});
@@ -408,7 +408,6 @@ class _TemplateEditorPageState extends State<TemplateEditorPage> {
               onSelectionChanged: (_) {},
               onTapTask: _openTask,
               onToggle: actions.toggleTask,
-              onSwipe: (t, right) => right ? actions.toggleTask(t) : _due(t),
               empty: Center(
                 child: Padding(
                   padding: const EdgeInsets.all(32),

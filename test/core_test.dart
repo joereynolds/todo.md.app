@@ -219,9 +219,21 @@ void main() {
     // A view combines with the search box: both must match.
     final flt = TaskFilter()..setView('due:overdue OR due:today');
     flt.setText('movie');
-    expect([for (final t in f.tasks) if (flt.matches(t)) t.text], ['Movie']);
+    expect(
+      [
+        for (final t in f.tasks)
+          if (flt.matches(t)) t.text,
+      ],
+      ['Movie'],
+    );
     flt.setText('');
-    expect([for (final t in f.tasks) if (flt.matches(t)) t.text], ['Wash', 'Movie']);
+    expect(
+      [
+        for (final t in f.tasks)
+          if (flt.matches(t)) t.text,
+      ],
+      ['Wash', 'Movie'],
+    );
     expect(flt.narrows, isTrue);
     expect(flt.searchNarrows, isFalse);
 
@@ -230,8 +242,12 @@ void main() {
     List<String> done(String text, {int states = 0x3}) {
       final flt = TaskFilter()..states = states;
       flt.setText(text);
-      return [for (final t in g.tasks) if (flt.matches(t)) t.text];
+      return [
+        for (final t in g.tasks)
+          if (flt.matches(t)) t.text,
+      ];
     }
+
     expect(done('done:today'), ['a']);
     expect(done('done:week'), ['a', 'b']);
     expect(done(''), ['d']); // done hidden as usual
@@ -322,5 +338,17 @@ void main() {
   test('addMonths clamps', () {
     expect(isoDay(addMonths(dayOf(2026, 1, 31), 1)), '2026-02-28');
     expect(isoDay(addMonths(dayOf(2026, 1, 15), -1)), '2025-12-15');
+  });
+
+  test('viewDefaults: tags of the first alternative, due:today', () {
+    var d = viewDefaults('#Music #work/admin, OR #video');
+    expect(d.tags, ['Music', 'work/admin']);
+    expect(d.dueToday, isFalse);
+    d = viewDefaults('due:today #a #A ~<=15m');
+    expect(d.tags, ['a']);
+    expect(d.dueToday, isTrue);
+    d = viewDefaults('due:week kitchen #42');
+    expect(d.tags, isEmpty);
+    expect(d.dueToday, isFalse);
   });
 }

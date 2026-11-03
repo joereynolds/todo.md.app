@@ -93,7 +93,8 @@ void main() {
       'view/theme': theme,
       'view/tab': tab,
       'filter/states': states,
-      'views/list': '[{"name":"This week","filter":"due:overdue OR due:week"},{"name":"Home","filter":"#home OR #admin"}]',
+      'views/list':
+          '[{"name":"This week","filter":"due:overdue OR due:week"},{"name":"Home","filter":"#home OR #admin"}]',
     });
     final settings = await Settings.load();
     store = TaskStore()..watching = false;
@@ -155,10 +156,10 @@ void main() {
 
   testWidgets('views', (tester) async {
     await boot(tester, 'light');
-    await tester.tap(find.byKey(const Key('viewTitle')));
+    await tester.tap(find.byKey(const ValueKey('view-Home')));
     await tester.pumpAndSettle();
     await shot('views-light');
-    await tester.tap(find.byKey(const ValueKey('editView-Home')));
+    await tester.tap(find.byKey(const ValueKey('view-Home'))); // the active one: edit
     await tester.pumpAndSettle();
     await shot('view-edit-light');
   });
@@ -175,7 +176,10 @@ void main() {
 
   testWidgets('filter help', (tester) async {
     await boot(tester, 'light');
-    await tester.tap(find.byTooltip('How to filter'));
+    await tester.tap(find.byKey(const Key('filters')));
+    await tester.pumpAndSettle();
+    await shot('filters-light');
+    await tester.tap(find.byKey(const Key('filterTips')));
     await tester.pumpAndSettle();
     await shot('filter-help-light');
   });

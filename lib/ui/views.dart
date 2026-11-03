@@ -1,6 +1,8 @@
-// Saved views: named filters. The title opens [ViewsSheet] to switch between
-// them (or back to all tasks); [showViewEditor] creates, edits and deletes.
+// Saved views: named filters, shown as tabs along the top ([ViewStrip]) and
+// stepped through with horizontal swipes ([ViewSwiper]); [showViewEditor]
+// creates, edits and deletes.
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../core/parser.dart' as parser;
@@ -10,96 +12,242 @@ import 'settings.dart';
 import 'tags.dart';
 import 'theme.dart';
 
-/// What the views sheet asks for.
-sealed class ViewChoice {
-  const ViewChoice();
-}
-
-class SelectView extends ViewChoice {
-  const SelectView(this.view);
-  final SavedView? view; // null: all tasks
-}
-
-class EditView extends ViewChoice {
-  const EditView(this.view);
-  final SavedView view;
-}
-
-class NewView extends ViewChoice {
-  const NewView(this.filter);
-  final String filter; // prefilled (the current search), may be empty
-}
-
-class ViewsSheet extends StatelessWidget {
-  const ViewsSheet({super.key, required this.views, required this.current, required this.search});
+/// The views along the top: "All" and each view. Tap one to show it; tap the
+/// active one (or long-press any) to edit it; + makes a new one.
+class ViewStrip extends StatefulWidget {
+  const ViewStrip({
+    super.key,
+    required this.views,
+    required this.current,
+    required this.onSelect,
+    required this.onEdit,
+    required this.onNew,
+  });
   final List<SavedView> views;
-  final String? current;
-  final String search; // the search box, offered as a new view
+  final SavedView? current; // null: all tasks
+  final ValueChanged<SavedView?> onSelect;
+  final ValueChanged<SavedView> onEdit;
+  final VoidCallback onNew;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+  State<ViewStrip> createState() => _ViewStripState();
+}
+
+class _ViewStripState extends State<ViewStrip> {
+  final _active = GlobalKey();
+
+  @override
+  void didUpdateWidget(ViewStrip old) {
+    super.didUpdateWidget(old);
+    if (old.current != widget.current) {
+      // Keep the active one in sight (after a swipe, say).
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final c = _active.currentContext;
+        if (c != null && c.mounted) {
+          Scrollable.ensureVisible(c, alignment: 0.5, duration: const Duration(milliseconds: 200));
+        }
+      });
+    }
+  }
+
+  Widget _tab(BuildContext context, String label, SavedView? v) {
     final colors = context.colors;
-    Widget mark(bool on) =>
-        SizedBox(width: 24, child: on ? Icon(Icons.check, size: 20, color: theme.colorScheme.primary) : null);
-    return SafeArea(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-              child: Text('Views', style: theme.textTheme.titleMedium),
-            ),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                children: [
-                  ListTile(
-                    key: const Key('view-all'),
-                    leading: mark(current == null),
-                    title: const Text('All tasks'),
-                    onTap: () => Navigator.pop(context, const SelectView(null)),
-                  ),
-                  for (final v in views)
-                    ListTile(
-                      key: ValueKey('view-${v.name}'),
-                      leading: mark(current == v.name),
-                      title: Text(v.name),
-                      subtitle: Text(
-                        v.filter,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: colors.dim, fontSize: 12.5),
-                      ),
-                      trailing: IconButton(
-                        key: ValueKey('editView-${v.name}'),
-                        tooltip: 'Edit view',
-                        icon: Icon(Icons.edit_outlined, size: 20, color: colors.dim),
-                        onPressed: () => Navigator.pop(context, EditView(v)),
-                      ),
-                      onTap: () => Navigator.pop(context, SelectView(v)),
-                    ),
-                ],
-              ),
-            ),
-            const Divider(),
-            ListTile(
-              key: const Key('newView'),
-              leading: const SizedBox(width: 24, child: Icon(Icons.add, size: 20)),
-              title: Text(search.trim().isEmpty ? 'New view' : 'New view from this filter'),
-              subtitle: search.trim().isEmpty
-                  ? null
-                  : Text(search.trim(), maxLines: 1, overflow: TextOverflow.ellipsis),
-              onTap: () => Navigator.pop(context, NewView(search.trim())),
-            ),
-            const SizedBox(height: 6),
-          ],
+    final theme = Theme.of(context);
+    final on = v == widget.current;
+    return GestureDetector(
+      key: on ? _active : null,
+      behavior: HitTestBehavior.opaque,
+      onTap: () => on ? (v == null ? null : widget.onEdit(v)) : widget.onSelect(v),
+      onLongPress: v == null ? null : () => widget.onEdit(v),
+      child: Container(
+        key: ValueKey(v == null ? 'view-all' : 'view-${v.name}'),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: on ? theme.colorScheme.primary : Colors.transparent, width: 2)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: on ? FontWeight.w600 : FontWeight.w400,
+            color: on ? theme.colorScheme.onSurface : colors.dim,
+          ),
         ),
       ),
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 34,
+      child: ListView(
+        key: const Key('viewStrip'),
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        children: [
+          _tab(context, 'All', null),
+          for (final v in widget.views) _tab(context, v.name, v),
+          IconButton(
+            key: const Key('newView'),
+            tooltip: 'New view',
+            visualDensity: VisualDensity.compact,
+            iconSize: 18,
+            icon: Icon(Icons.add, color: context.colors.dim),
+            onPressed: widget.onNew,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Horizontal swipes on [child] step through the views: the content follows
+/// the finger, and the next one slides in. [index] of [count] (0 = all tasks).
+class ViewSwiper extends StatefulWidget {
+  const ViewSwiper({
+    super.key,
+    required this.index,
+    required this.count,
+    required this.onChanged,
+    required this.child,
+    this.enabled = true,
+  });
+  final int index, count;
+  final ValueChanged<int> onChanged;
+  final Widget child;
+  final bool enabled;
+
+  @override
+  State<ViewSwiper> createState() => _ViewSwiperState();
+}
+
+class _ViewSwiperState extends State<ViewSwiper> with SingleTickerProviderStateMixin {
+  late final _anim = AnimationController(vsync: this, duration: const Duration(milliseconds: 200))
+    ..addListener(() => setState(() {}));
+  bool _dragging = false;
+  double _dx = 0; // while dragging
+  double _from = 0; // where the settle animation starts (it ends at 0)
+  double _width = 1;
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  double get _offset => _dragging ? _dx : _from * (1 - Curves.easeOutCubic.transform(_anim.value));
+
+  bool _has(int dir) {
+    final i = widget.index + dir;
+    return i >= 0 && i < widget.count;
+  }
+
+  void _start(DragStartDetails _) {
+    final at = _offset;
+    _anim.stop();
+    setState(() {
+      _dragging = true;
+      _dx = at;
+    });
+  }
+
+  void _update(DragUpdateDetails d) {
+    final delta = d.primaryDelta ?? 0;
+    // Left (negative) goes to the next view; resist where there's none.
+    final dir = (_dx + delta) < 0 ? 1 : -1;
+    setState(() => _dx += _has(dir) ? delta : delta * 0.25);
+  }
+
+  void _end(DragEndDetails d) {
+    final v = d.primaryVelocity ?? 0;
+    final dir = _dx < 0 ? 1 : -1;
+    final far = _dx.abs() > _width * 0.2;
+    final flung = v.abs() > 400 && (v < 0) == (_dx < 0);
+    if ((far || flung) && _dx != 0 && _has(dir)) {
+      _from = dir * _width * 0.3; // the next one comes in from the side swiped away from
+      widget.onChanged(widget.index + dir);
+    } else {
+      _from = _dx;
+    }
+    _dragging = false;
+    _dx = 0;
+    _anim.forward(from: 0);
+  }
+
+  // Also called for every gesture this recognizer lost (a scroll, a tap), so
+  // only a drag in progress may move anything.
+  void _cancel() {
+    if (!_dragging) return;
+    _from = _dx;
+    _dragging = false;
+    _dx = 0;
+    _anim.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        _width = c.maxWidth;
+        final dx = _offset;
+        final fade = (1 - (dx.abs() / _width).clamp(0.0, 1.0) * 0.8);
+        final on = widget.enabled && widget.count > 1;
+        return RawGestureDetector(
+          gestures: {
+            if (on)
+              _SwipeRecognizer: GestureRecognizerFactoryWithHandlers<_SwipeRecognizer>(
+                () => _SwipeRecognizer(debugOwner: this),
+                (r) => r
+                  ..onStart = _start
+                  ..onUpdate = _update
+                  ..onEnd = _end
+                  ..onCancel = _cancel,
+              ),
+          },
+          child: ClipRect(
+            child: Transform.translate(
+              offset: Offset(dx, 0),
+              child: Opacity(opacity: fade, child: widget.child),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// A horizontal drag that wins at the usual slop, but only while the finger
+/// has gone further across than up or down. The list's vertical scroll uses
+/// the same slop, so whichever direction the finger mostly goes wins: a
+/// sideways swipe with some drift isn't taken for a scroll (or a pull to
+/// refresh), and a scroll with some drift isn't taken for a swipe.
+class _SwipeRecognizer extends HorizontalDragGestureRecognizer {
+  _SwipeRecognizer({super.debugOwner});
+
+  final _downAt = <int, Offset>{};
+  Offset _moved = Offset.zero;
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    _downAt[event.pointer] = event.position;
+    _moved = Offset.zero;
+    super.addAllowedPointer(event);
+  }
+
+  @override
+  void handleEvent(PointerEvent event) {
+    final down = _downAt[event.pointer];
+    if (event is PointerMoveEvent && down != null) _moved = event.position - down;
+    if (event is PointerUpEvent || event is PointerCancelEvent) _downAt.remove(event.pointer);
+    super.handleEvent(event);
+  }
+
+  @override
+  bool hasSufficientGlobalDistanceToAccept(PointerDeviceKind kind, double? deviceTouchSlop) {
+    final dx = _moved.dx.abs(), dy = _moved.dy.abs();
+    return dx > computeHitSlop(kind, gestureSettings) && dx > dy;
   }
 }
 

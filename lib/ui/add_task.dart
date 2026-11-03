@@ -126,19 +126,27 @@ Future<NewTask?> showAddTask(
   required String title,
   required String where,
   Day? due,
+  String text = '', // prefilled (a view's tags); the cursor goes before it
   List<String> tags = const [],
   VoidCallback? onTemplate, // shows "From a template…"; called after the sheet closes
 }) {
   return showModalBottomSheet<NewTask>(
     context: context,
     isScrollControlled: true,
-    builder: (_) => _AddTaskSheet(title: title, where: where, due: due, tags: tags, onTemplate: onTemplate),
+    builder: (_) => _AddTaskSheet(title: title, where: where, due: due, text: text, tags: tags, onTemplate: onTemplate),
   );
 }
 
 class _AddTaskSheet extends StatefulWidget {
-  const _AddTaskSheet({required this.title, required this.where, this.due, this.tags = const [], this.onTemplate});
-  final String title, where;
+  const _AddTaskSheet({
+    required this.title,
+    required this.where,
+    this.due,
+    this.text = '',
+    this.tags = const [],
+    this.onTemplate,
+  });
+  final String title, where, text;
   final List<String> tags;
   final VoidCallback? onTemplate;
   final Day? due;
@@ -148,7 +156,9 @@ class _AddTaskSheet extends StatefulWidget {
 }
 
 class _AddTaskSheetState extends State<_AddTaskSheet> {
-  final _text = TextEditingController();
+  late final _text = TextEditingController.fromValue(
+    TextEditingValue(text: widget.text, selection: const TextSelection.collapsed(offset: 0)),
+  );
   late Day? _due = widget.due;
 
   @override

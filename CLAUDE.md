@@ -12,7 +12,7 @@ app's own folder). Linux desktop is enabled for development only.
 ## Build / run / test
 
 ```sh
-flutter test                          # core, store/models, widget tests (47)
+flutter test                          # core, store/models, widget tests (49)
 flutter analyze
 flutter test benchmark/               # 200k tasks / 5,000 files, JIT timings
 BENCH_DIR=~/notes flutter test benchmark/
@@ -50,11 +50,12 @@ search box is debounced 150 ms.
 | `lib/core/models.dart` | `FlatModel` / `TaskListModel` / `AgendaModel` (the desktop's `FlatTaskModel`). Rows are `ListRow`. |
 | `lib/core/actions.dart` | The edits behind every action (state, due, ETA, replace, delete, add). Always includes subtasks. |
 | `lib/ui/task_list.dart` | `TaskListView` (fixed 48 px rows, gestures, drag-select), `TaskRow`, `CheckboxPainter`, `ProgressPill`. |
-| `lib/ui/home.dart` | Tabs, search + chips, selection mode + action bar, all action flows (`MainWindow`). |
+| `lib/ui/home.dart` | Tabs, views strip + swiper, search box, selection mode + action bar, all action flows (`MainWindow`). |
+| `lib/ui/filter_sheet.dart` | The search box's tune button: state toggles, ETA preset, tag list, "Search tips". |
 | `lib/ui/calendar.dart` | The desktop sidebar as a tab: month grid (folds to a week), day list, stat tiles. |
 | `lib/ui/task_sheet.dart`, `dialogs.dart`, `add_task.dart`, `tags.dart` | Task sheet; due, ETA, replace, prompts; add-task sheet, `DueRow`, `Pick`; tag pills, tag list, suggestions, picker. |
 | `lib/ui/theme.dart`, `settings.dart`, `settings_page.dart` | Light/Soft/Dark/System and the desktop's Clean/Midnight/Paper (same tokens; accent colours in-progress; Midnight's pill tabs = nav-bar pill; Paper's card = `TaskColors.card`, `_card` in home; no roomier rows, they stay 48 px) + `TaskColors`; SharedPreferences (same keys as the desktop QSettings, plus `SavedView`s); folders page. |
-| `lib/ui/views.dart` | Views sheet (switch) and view editor. |
+| `lib/ui/views.dart` | `ViewStrip` (tabs along the top), `ViewSwiper` (horizontal swipes step views), view editor. |
 | `lib/core/templates.dart`, `lib/ui/templates_page.dart` | Templates: dir, names, save/instantiate; list page, editor, picker. |
 | `lib/ui/help_page.dart`, `filter_help.dart` | ⋮ → Help (how the app works, plain words; keep it in step with features), and the search box's ? sheet (examples tap to apply). |
 | `lib/ui/platform.dart` + `MainActivity.kt` | Storage access over the `todomd/storage` channel, folder picker, open file. |
@@ -76,8 +77,8 @@ search box is debounced 150 ms.
 - **Writes**: temp file `.<name>.todomd~` + rename (in-place fallback); hidden so
   the scanner and sync tools ignore it.
 - **Gestures instead of shortcuts**: checkbox tap = toggle with subtasks; row tap
-  = task sheet; swipe right = toggle done, left = due date (`Dismissible` whose
-  `confirmDismiss` runs the action and returns false); long press + drag =
+  = task sheet; **no row swipes** (the user didn't want them: accidental
+  completions); horizontal swipes on Tasks/Agenda switch views; long press + drag =
   range select with edge auto-scroll, done by one recognizer on the whole list
   (per-row recognizers die when their row scrolls away). Header tap = fold (or,
   while selecting, select its tasks). Back clears the selection.
@@ -87,6 +88,9 @@ search box is debounced 150 ms.
   folder, creating it if needed (`TaskActions.inboxPath`). The add sheet
   (`add_task.dart`) also takes a due date (quick picks + inline month grid);
   add below / add subtask use the same sheet.
+- **Main screen kept uncluttered** (the user asked): the search box says just
+  "Search"; state toggles, ETA preset and the tag list live in `FilterSheet`
+  behind the tune icon in the search box (a dot when states/ETA aren't the default).
 - **Look**: the user dislikes stock Material. `theme.dart` flattens it: 4 px
   corners, thin borders, no tonal fills/tints, no ripples (`NoSplash`), no
   shadows, plain nav bar. Use the app's own `Pick` toggles and `MonthView`
@@ -110,7 +114,7 @@ search box is debounced 150 ms.
 - UI: tags show on the title line, at the right edge (purple, `TaskColors.tag`,
   at most half the width);
   tapping one sets the filter to `#tag` (again clears; from the calendar it switches
-  to Tasks). Also tappable in the task sheet. The `#` Tags chip in the filter bar
+  to Tasks). Also tappable in the task sheet. The Tags section of the filter sheet
   lists every tag on an open task, with the count (`TaskStore.tags()`); tags only on
   done/cancelled tasks are left out (suggestions still offer them).
 - Typing `#…` in the add-task sheet or the task sheet's text box shows matching
@@ -135,10 +139,16 @@ ancestors (`actions.bulletList`). Clears the selection.
   alternatives: `a b OR c` = (a and b) or c. Lower-case `or` is a plain word.
   `TaskFilter` parses into clauses (`_Clause`), matched if any clause holds.
 - **Views** (`lib/ui/views.dart`): a name + a filter in the same language. Saved in
-  SharedPreferences as JSON (`views/list`, active one in `views/current`). Tap the
-  title ("todo.md ▾", or the view's name) → list: All tasks, each view (pencil =
-  edit), "New view" (prefilled with the search box if it has text; that search is
-  then cleared). The editor has quick terms (due:week, due:overdue …) and tag pills
+  SharedPreferences as JSON (`views/list`, active one in `views/current`). They're
+  tabs along the top of Tasks/Agenda (`ViewStrip`, under the search box: All, each view, +; shown once a
+  view exists, else ⋮ → New view…). Tap = switch, tap the active one or long-press =
+  edit; swiping the list left/right steps through them (`ViewSwiper`: one model; its recognizer wins at the normal slop only while the drag is more across than down, so neither a swipe nor a scroll is mistaken for the other (or for pull-to-refresh). Note a drag recognizer's onCancel also fires for every gesture it *lost*: the swiper ignores it unless dragging, else each scroll replayed the last swipe's offset;
+  the content follows the finger and the next slides in; off while selecting).
+  New view is prefilled with the search box if it has text (that search is then
+  cleared). **Adding in a view**: + starts the task with the tags of the view's
+  first OR-alternative (cursor before them) and due today for `due:today`
+  (`viewDefaults` in filter.dart); if the view still doesn't match it, the status
+  line says so. The editor has quick terms (due:week, due:overdue …) and tag pills
   that toggle a term in or out (a tag after a tag is joined with OR), and a live
   count of matching tasks (state toggles apply).
 - The active view's filter goes in `TaskFilter.setView` for **Tasks and Agenda** (not

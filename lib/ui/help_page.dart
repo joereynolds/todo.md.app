@@ -45,7 +45,6 @@ const _sections = <(IconData, String, List<String>)>[
     'Working with tasks',
     [
       'Tap the box to tick a task off (its subtasks too). Tap it again to undo.',
-      'Swipe right to mark done, swipe left to set a due date.',
       'Tap a task to open it: change its text, state, due date, estimate or tags, add a task below it or a subtask, '
           'open its file, or delete it.',
       'Press and hold, then drag, to select several tasks. The bar at the bottom then sets them all at once; '
@@ -68,10 +67,11 @@ const _sections = <(IconData, String, List<String>)>[
       'Type in the search box to show only matching tasks. Several words must all match.',
       'Special terms filter by tag, due date, estimate or state, e.g. `#home`,  `due:today`,  `~<=15m`,  `is:doing`,  '
           '`done:today`. '
-          'Put `OR` between terms for "any of these". Tap ? in the search box for the full list, with examples '
-          'you can tap to try.',
-      'The chips under the search box: ETA picks a time range; Tags lists your tags; Todo, Doing, Done and '
-          'Cancelled show or hide tasks in that state (done and cancelled are hidden at first).',
+          'Put `OR` between terms for "any of these". The full list, with examples you can tap to try, is under '
+          '"Search tips" in the filters.',
+      'The sliders button in the search box opens the filters: Todo, Doing, Done and Cancelled show or hide tasks '
+          'in that state (done and cancelled are hidden at first); Estimate picks a time range; Tags lists your '
+          'tags. A dot on the button means something is set; Reset puts it back.',
     ],
   ),
   (
@@ -80,10 +80,12 @@ const _sections = <(IconData, String, List<String>)>[
     [
       'A view is a search you keep, with a name. "This week" could be `due:overdue OR due:week`; '
           '"Media" could be `#music OR #video OR #photography`.',
-      'Tap the title at the top to switch views, or go back to all tasks. The title shows the view you\'re in, '
-          'and the search box still narrows things down within it.',
-      'Choose "New view" there to make one (it starts from whatever is in the search box). The pencil next to a '
-          'view edits or deletes it.',
+      'Your views are tabs along the top, after All. Tap one, or swipe the list left and right to go from one to '
+          'the next. The search box still narrows things down within a view.',
+      'The + button in a view starts the new task with the view\'s tags (and today\'s date for a `due:today` '
+          'view), so it shows up there.',
+      'Make one with the + at the end of the tabs, or ⋮ → New view (it starts from whatever is in the search '
+          'box). Tap the view you\'re in, or press and hold any, to edit or delete it.',
     ],
   ),
   (

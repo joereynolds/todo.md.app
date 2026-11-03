@@ -57,7 +57,6 @@ class CalendarPane extends StatefulWidget {
     required this.onFilter,
     required this.onReveal,
     required this.onToggle,
-    required this.onSwipe,
     this.onTag,
   });
 
@@ -67,7 +66,6 @@ class CalendarPane extends StatefulWidget {
   final ValueChanged<String> onFilter;
   final ValueChanged<Task> onReveal;
   final ValueChanged<Task> onToggle;
-  final void Function(Task, bool right) onSwipe;
   final ValueChanged<String>? onTag;
 
   @override
@@ -116,7 +114,6 @@ class _CalendarPaneState extends State<CalendarPane> {
                 onSelectionChanged: (_) {},
                 onTapTask: widget.onReveal,
                 onToggle: widget.onToggle,
-                onSwipe: widget.onSwipe,
                 onTag: widget.onTag,
               ),
             ),

@@ -265,3 +265,18 @@ class TaskFilter {
     return visible || _anyDone(_search, t, _today) || _anyDone(_view, t, _today);
   }
 }
+
+/// What a task added while view [filter] is showing gets, so it shows there:
+/// the tags of the first alternative (as written), and today as the due
+/// date for due:today. Other terms can't be met by adding text.
+({List<String> tags, bool dueToday}) viewDefaults(String filter) {
+  final tags = <String>[];
+  var dueToday = false;
+  for (final term in filter.split(RegExp(r'\s+'))) {
+    if (term == 'OR') break;
+    final tag = parser.tagToken(term);
+    if (tag != null && !tags.any((t) => t.toLowerCase() == tag.toLowerCase())) tags.add(tag);
+    if (term.toLowerCase() == 'due:today') dueToday = true;
+  }
+  return (tags: tags, dueToday: dueToday);
+}

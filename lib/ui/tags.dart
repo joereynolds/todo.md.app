@@ -1,10 +1,9 @@
-// Tag widgets: pills, the list of every tag (filter by one), suggestions
-// while typing "#…" in a text field, and a picker to add a tag to a task.
+// Tag widgets: pills, suggestions while typing "#…" in a text field, and a
+// picker to add a tag to a task. (The tags to filter by are in FilterSheet.)
 
 import 'package:flutter/material.dart';
 
 import '../core/parser.dart' as parser;
-import '../core/store.dart';
 import 'theme.dart';
 
 /// A tag as a tappable outlined pill ("#office"). With [onRemove], it has an
@@ -69,68 +68,6 @@ class TagPill extends StatelessWidget {
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-/// Every tag in use, to filter by one. Pops with the tag, or '' to clear the
-/// filter.
-class TagSheet extends StatelessWidget {
-  const TagSheet({super.key, required this.tags, this.active});
-  final List<TagCount> tags;
-  final String? active; // "#office", lower case
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = context.colors;
-    return SafeArea(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.7),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 8, 6),
-              child: Row(
-                children: [
-                  Expanded(child: Text('Tags', style: theme.textTheme.titleMedium)),
-                  if (active != null)
-                    TextButton(onPressed: () => Navigator.pop(context, ''), child: const Text('Clear filter')),
-                ],
-              ),
-            ),
-            if (tags.isEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                child: Text(
-                  'No tags yet. Add one anywhere in a task, like  #office',
-                  style: TextStyle(color: colors.dim),
-                ),
-              )
-            else
-              Flexible(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-                  child: Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      for (final t in tags)
-                        TagPill(
-                          tag: t.name,
-                          trailing: '${t.open}', // open tasks
-                          selected: active == '#${t.name.toLowerCase()}',
-                          onTap: () => Navigator.pop(context, t.name),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }

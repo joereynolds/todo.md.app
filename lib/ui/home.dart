@@ -1,5 +1,6 @@
-// The main screen: Tasks / Agenda / Calendar tabs, the search and state
-// filters, selection mode with its bulk action bar, and every action flow.
+// The main screen: Tasks / Agenda / Calendar tabs, the views strip (swipe
+// between views), the search box and its filter sheet, selection mode with
+// its bulk action bar, and every action flow.
 // Mirrors src/mainwindow.cpp.
 
 import 'dart:async';
@@ -19,23 +20,16 @@ import 'calendar.dart';
 import 'add_task.dart';
 import 'dialogs.dart';
 import 'filter_help.dart';
+import 'filter_sheet.dart';
 import 'help_page.dart';
 import 'platform.dart';
 import 'settings.dart';
 import 'settings_page.dart';
 import 'task_list.dart';
-import 'tags.dart';
 import 'task_sheet.dart';
 import 'templates_page.dart';
 import 'theme.dart';
 import 'views.dart';
-
-const _stateChips = [
-  (TaskState.todo, 'Todo'),
-  (TaskState.doing, 'Doing'),
-  (TaskState.done, 'Done'),
-  (TaskState.cancelled, 'Cancelled'),
-];
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.store, required this.settings});
@@ -287,25 +281,33 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   List<String> get tagNames => [for (final t in store.tags()) t.name];
 
-  Future<void> _pickTag() async {
+  /// The state toggles, ETA preset and tag list, out of the way behind the
+  /// search box's tune button.
+  Future<void> _openFilters() async {
     final active = _activeTag?.toLowerCase();
     // Only tags on open tasks (plus the one being filtered by, so it can be cleared).
     final tags = [
       for (final t in store.tags())
         if (t.open > 0 || active == '#${t.name.toLowerCase()}') t,
     ];
-    final picked = await showModalBottomSheet<String>(
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (sheet) => TagSheet(tags: tags, active: active),
+      builder: (sheet) => FilterSheet(
+        states: list.filter.states,
+        etaPreset: etaPreset,
+        tags: tags,
+        activeTag: active,
+        onStates: _setStates,
+        onEta: _setEtaPreset,
+        onTag: (tag) => tag.isEmpty ? setFilter('') : filterTag(tag),
+        onHelp: _help,
+      ),
     );
-    if (picked == null) return;
-    if (picked.isEmpty) {
-      setFilter('');
-    } else {
-      filterTag(picked);
-    }
   }
+
+  /// The filter sheet's settings differ from the defaults.
+  bool get _filtersSet => list.filter.states != defaultStates || etaPreset != 0;
 
   // ------------------------------------------------------------ views
 
@@ -334,21 +336,11 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return n;
   }
 
-  Future<void> _openViews() async {
-    final choice = await showModalBottomSheet<ViewChoice>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => ViewsSheet(views: views, current: view?.name, search: search.text),
-    );
-    if (!mounted || choice == null) return;
-    switch (choice) {
-      case SelectView(:final view):
-        setView(view);
-      case EditView(:final view):
-        await _editView(view);
-      case NewView(:final filter):
-        await _editView(null, filter: filter);
-    }
+  int get _viewIndex => view == null ? 0 : views.indexOf(view!) + 1;
+
+  void _newView() {
+    final f = search.text.trim();
+    _editView(null, filter: f);
   }
 
   Future<void> _editView(SavedView? original, {String filter = ''}) async {
@@ -393,10 +385,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {});
   }
 
-  void _toggleState(TaskState s) {
-    final on = !list.filter.stateVisible(s);
+  void _setStates(int states) {
     for (final m in [list, agenda, day]) {
-      m.filter.setStateVisible(s, on);
+      m.filter.states = states;
       m.refilter();
     }
     settings.states = list.filter.states;
@@ -418,14 +409,6 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void toggleTask(Task t) {
     final n = actions.toggleTask(t);
     _done(n, t.state == TaskState.done ? 'Mark todo' : 'Mark done');
-  }
-
-  void _swipe(Task t, bool right) {
-    if (right) {
-      toggleTask(t);
-    } else {
-      _due([t]);
-    }
   }
 
   void _state(List<Task> tasks, TaskState s) => _done(actions.setState(tasks, s), stateLabels[s]!);
@@ -530,20 +513,32 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   /// The + button: always into todo.md in the (first) folder, created if needed.
+  /// In a view, the task starts with the view's tags (and due today for a
+  /// due:today view), so it shows up there.
   Future<void> addTopLevel() async {
     if (store.roots.isEmpty) return _openSettings();
     final path = actions.inboxPath;
+    final v = view;
+    final defaults = viewDefaults(v?.filter ?? '');
     final t = await showAddTask(
       context,
       tags: tagNames,
-      title: 'New task',
+      title: v == null ? 'New task' : 'New task in ${v.name}',
       where: relPathFor(path, store.roots),
+      text: defaults.tags.isEmpty ? '' : ' ${defaults.tags.map((t) => '#$t').join(' ')}',
+      due: defaults.dueToday ? today() : null,
       onTemplate: () => _pickAndInsert(null),
     );
     if (t == null) return;
     final k = actions.append(path, t.text, due: t.due);
-    if (k != null) _say('Task added');
     if (tab != 0) _setTab(0);
+    final added = k == null ? null : store.taskFor(k);
+    if (added == null) return;
+    if (v != null && list.reveal(added) < 0) {
+      _say('Added to ${relPathFor(path, store.roots)}; "${v.name}" doesn\'t show it');
+      return;
+    }
+    _say('Task added');
     _showNew(k);
   }
 
@@ -749,7 +744,17 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
               Expanded(child: _NoFolders(onAdd: _openSettings))
             else ...[
               if (tab < 2) _filterBar(),
-              Expanded(child: _card(_body())),
+              Expanded(
+                child: tab < 2
+                    ? ViewSwiper(
+                        index: _viewIndex,
+                        count: views.length + 1,
+                        enabled: !selecting,
+                        onChanged: (i) => setView(i == 0 ? null : views[i - 1]),
+                        child: _card(_body()),
+                      )
+                    : _card(_body()),
+              ),
             ],
           ],
         ),
@@ -763,21 +768,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   PreferredSizeWidget _appBar() {
     return AppBar(
-      title: _withStatus(
-        GestureDetector(
-          key: const Key('viewTitle'),
-          behavior: HitTestBehavior.opaque,
-          onTap: _openViews,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(child: Text(view?.name ?? 'todo.md', overflow: TextOverflow.ellipsis)),
-              const SizedBox(width: 2),
-              Icon(Icons.arrow_drop_down, color: context.colors.dim),
-            ],
-          ),
-        ),
-      ),
+      title: _withStatus(const Text('todo.md', overflow: TextOverflow.ellipsis)),
       actions: [
         IconButton(
           tooltip: store.canUndo ? 'Undo ${store.undoLabel}' : 'Undo',
@@ -810,6 +801,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 _openHelp();
               case 'templates':
                 _openTemplates();
+              case 'newView':
+                _newView();
             }
           },
           itemBuilder: (_) => [
@@ -820,6 +813,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
               CheckedPopupMenuItem(value: 'empty', checked: agenda.showEmptyDays, child: const Text('Show empty days')),
             const PopupMenuItem(value: 'reload', child: Text('Reload')),
             const PopupMenuDivider(),
+            if (store.roots.isNotEmpty) const PopupMenuItem(value: 'newView', child: Text('New view…')),
             if (store.roots.isNotEmpty) const PopupMenuItem(value: 'templates', child: Text('Templates')),
             const PopupMenuItem(value: 'settings', child: Text('Folders & theme')),
             const PopupMenuItem(value: 'help', child: Text('Help')),
@@ -875,93 +869,57 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Widget _filterBar() {
     final colors = context.colors;
+    final theme = Theme.of(context);
     return Material(
-      color: Theme.of(context).appBarTheme.backgroundColor,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(10, 2, 10, 6),
-        child: Column(
-          children: [
-            TextField(
+      color: theme.appBarTheme.backgroundColor,
+      child: Column(
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(10, 2, 10, views.isEmpty ? 6 : 0),
+            child: TextField(
               key: const Key('search'),
               controller: search,
               onChanged: _onSearchChanged,
               textInputAction: TextInputAction.search,
               autocorrect: false,
               decoration: InputDecoration(
-                hintText: 'Search tasks, or tap ? for #tags, dates …',
+                hintText: 'Search',
                 prefixIcon: const Icon(Icons.search, size: 20),
                 suffixIcon: ListenableBuilder(
                   listenable: search,
-                  builder: (_, _) => search.text.isEmpty
-                      ? IconButton(
-                          tooltip: 'How to filter',
-                          icon: const Icon(Icons.help_outline, size: 20),
-                          onPressed: _help,
-                        )
-                      : IconButton(
+                  builder: (_, _) => Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (search.text.isNotEmpty)
+                        IconButton(
                           tooltip: 'Clear',
                           icon: const Icon(Icons.clear, size: 20),
                           onPressed: () => setFilter(''),
                         ),
+                      IconButton(
+                        key: const Key('filters'),
+                        tooltip: 'Filters',
+                        onPressed: _openFilters,
+                        icon: Badge(
+                          isLabelVisible: _filtersSet,
+                          smallSize: 7,
+                          backgroundColor: theme.colorScheme.primary,
+                          child: Icon(
+                            Icons.tune,
+                            size: 20,
+                            color: _filtersSet ? theme.colorScheme.primary : colors.dim,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 6),
-            SizedBox(
-              height: 32,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    PopupMenuButton<int>(
-                      key: const Key('etaFilter'),
-                      tooltip: 'Filter by ETA',
-                      initialValue: etaPreset,
-                      onSelected: _setEtaPreset,
-                      itemBuilder: (_) => [
-                        for (var i = 0; i < etaPresets.length; i++)
-                          PopupMenuItem(value: i, key: ValueKey('eta-$i'), child: Text(etaPresets[i].label)),
-                      ],
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: Chip(
-                          visualDensity: VisualDensity.compact,
-                          backgroundColor: etaPreset == 0 ? null : colors.selection,
-                          avatar: const Icon(Icons.timer_outlined, size: 16),
-                          label: Text(etaPreset == 0 ? 'ETA' : etaPresets[etaPreset].label),
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: GestureDetector(
-                        key: const Key('tagFilter'),
-                        onTap: _pickTag,
-                        child: Chip(
-                          visualDensity: VisualDensity.compact,
-                          backgroundColor: _activeTag == null ? null : colors.selection,
-                          avatar: const Icon(Icons.tag, size: 16),
-                          label: Text(_activeTag ?? 'Tags'),
-                        ),
-                      ),
-                    ),
-                    for (final (s, label) in _stateChips)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 6),
-                        child: FilterChip(
-                          key: ValueKey('state-$label'),
-                          visualDensity: VisualDensity.compact,
-                          label: Text(label),
-                          selected: list.filter.stateVisible(s),
-                          onSelected: (_) => _toggleState(s),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+          if (views.isNotEmpty)
+            ViewStrip(views: views, current: view, onSelect: setView, onEdit: (v) => _editView(v), onNew: _newView),
+        ],
       ),
     );
   }
@@ -995,6 +953,11 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Widget _body() {
     final searching = list.filter.searchNarrows || etaPreset != 0;
+    void clear() {
+      setFilter('');
+      if (etaPreset != 0) _setEtaPreset(0);
+    }
+
     Widget empty(String what) => _Empty(
       text: searching
           ? 'Nothing matches the filter'
@@ -1002,7 +965,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ? 'Nothing in "${view!.name}"'
           : what,
       action: searching
-          ? TextButton(onPressed: () => setFilter(''), child: const Text('Clear filter'))
+          ? TextButton(onPressed: clear, child: const Text('Clear filter'))
           : view != null
           ? TextButton(onPressed: () => setView(null), child: const Text('Show all tasks'))
           : null,
@@ -1019,7 +982,6 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           onTapTask: _openTask,
           onToggle: toggleTask,
           onTag: filterTag,
-          onSwipe: _swipe,
           onRefresh: store.refresh,
           empty: store.loading ? const SizedBox() : empty('No tasks yet. Tap + to add one.'),
         );
@@ -1034,7 +996,6 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           onTapTask: _openTask,
           onToggle: toggleTask,
           onTag: filterTag,
-          onSwipe: _swipe,
           onRefresh: store.refresh,
           empty: store.loading ? const SizedBox() : empty('Nothing due. Tasks with !YYYY-MM-DD show here.'),
         );
@@ -1050,7 +1011,6 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           onReveal: reveal,
           onToggle: toggleTask,
           onTag: filterTag,
-          onSwipe: _swipe,
         );
     }
   }

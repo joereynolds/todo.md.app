@@ -5,7 +5,7 @@
 //   tap row          open the task sheet (or toggle selection while selecting)
 //   tap checkbox     done <-> todo, with subtasks
 //   tap chevron      collapse / expand (tap on a header does the same)
-//   swipe right      toggle done        swipe left   set due date
+//   (no swipes on rows: horizontal swipes switch views, see ViewSwiper)
 //   long press       start selecting; keep the finger down and drag to select
 //                    a range (auto-scrolls at the edges), like a photo gallery
 
@@ -35,7 +35,6 @@ class TaskListView extends StatefulWidget {
     required this.onSelectionChanged,
     required this.onTapTask,
     required this.onToggle,
-    this.onSwipe,
     this.onHeaderLongPress,
     this.onRefresh,
     this.controller,
@@ -54,7 +53,6 @@ class TaskListView extends StatefulWidget {
   final ValueChanged<Task> onTapTask;
   final ValueChanged<Task> onToggle;
   final ValueChanged<String>? onTag; // tapping a tag
-  final void Function(Task task, bool right)? onSwipe; // right = toggle done, left = due date
   final ValueChanged<int>? onHeaderLongPress; // row index
   final Future<void> Function()? onRefresh;
   final ScrollController? controller;
@@ -234,7 +232,7 @@ class _TaskListViewState extends State<TaskListView> {
     final t = r.task!;
     final k = keyOf(t);
     final selected = (_selecting && widget.selected.contains(k)) || widget.highlight == k;
-    final row = TaskRow(
+    return TaskRow(
       task: t,
       row: r,
       selected: selected,
@@ -242,60 +240,6 @@ class _TaskListViewState extends State<TaskListView> {
       onChevron: () => m.toggle(i),
       onCheck: _selecting ? () => _tapRow(i) : () => widget.onToggle(t),
       onTag: _selecting ? null : widget.onTag,
-    );
-    final swipe = widget.onSwipe;
-    if (swipe == null || _selecting) return row;
-    final colors = context.colors;
-    return Dismissible(
-      key: ValueKey(keyOf(t)),
-      dismissThresholds: const {DismissDirection.startToEnd: 0.25, DismissDirection.endToStart: 0.25},
-      confirmDismiss: (dir) async {
-        swipe(t, dir == DismissDirection.startToEnd);
-        return false; // an action, not a removal
-      },
-      background: _SwipeBackground(
-        color: colors.done,
-        icon: t.state == TaskState.done ? Icons.undo : Icons.check,
-        label: t.state == TaskState.done ? 'Todo' : 'Done',
-        alignLeft: true,
-      ),
-      secondaryBackground: _SwipeBackground(
-        color: colors.today,
-        icon: Icons.event,
-        label: 'Due date',
-        alignLeft: false,
-      ),
-      child: row,
-    );
-  }
-}
-
-class _SwipeBackground extends StatelessWidget {
-  const _SwipeBackground({required this.color, required this.icon, required this.label, required this.alignLeft});
-  final Color color;
-  final IconData icon;
-  final String label;
-  final bool alignLeft;
-
-  @override
-  Widget build(BuildContext context) {
-    final content = [
-      Icon(icon, color: Colors.white, size: 20),
-      const SizedBox(width: 8),
-      Text(
-        label,
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-      ),
-    ];
-    return ColoredBox(
-      color: color,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Row(
-          mainAxisAlignment: alignLeft ? MainAxisAlignment.start : MainAxisAlignment.end,
-          children: alignLeft ? content : content.reversed.toList(),
-        ),
-      ),
     );
   }
 }
