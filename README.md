@@ -4,6 +4,15 @@ The phone version of [todo.md](https://github.com/joereynolds/todo.md).
 
 Point it at a folder of notes and it'll find every task in every `.md` file.
 
+<p align="center">
+  <img src="docs/screenshots/tasks.png" alt="Tasks, file by file, with tags, due dates and estimates" width="200">
+  <img src="docs/screenshots/agenda.png" alt="Agenda: open tasks grouped by due day" width="200">
+  <img src="docs/screenshots/task.png" alt="A task opened: text, tags, state and actions" width="200">
+  <img src="docs/screenshots/calendar.png" alt="Calendar: month, the day's tasks, quick counts" width="200">
+</p>
+
+<sub>Midnight theme. Regenerate with `flutter test screenshots/ --update-goldens && python3 tool/readme_shots.py`.</sub>
+
 ## Installing
 
 ### Android

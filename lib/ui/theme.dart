@@ -5,6 +5,7 @@
 // also colours in-progress tasks there. The desktop's roomier rows are left
 // out: rows stay 48 px here.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 enum AppTheme { light, soft, dark, clean, midnight, paper, system }
@@ -149,7 +150,11 @@ ThemeData _build({
     side: BorderSide(color: line),
   );
   const pad = EdgeInsets.symmetric(horizontal: 12, vertical: 9);
-  final buttonText = const TextStyle(fontSize: 14, fontWeight: FontWeight.w600);
+  // The platform's font (Roboto on Android), spelled out so these styles match
+  // the body text everywhere, screenshots included (a style without a family
+  // gets the engine default, which in tests is a block font).
+  final font = Typography.material2021(platform: defaultTargetPlatform).black.bodyMedium?.fontFamily;
+  final buttonText = TextStyle(fontFamily: font, fontSize: 14, fontWeight: FontWeight.w600);
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
@@ -166,7 +171,7 @@ ThemeData _build({
       surfaceTintColor: Colors.transparent,
       toolbarHeight: 52,
       shape: Border(bottom: BorderSide(color: line, width: 0.5)),
-      titleTextStyle: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w600),
+      titleTextStyle: TextStyle(fontFamily: font, color: text, fontSize: 17, fontWeight: FontWeight.w600),
     ),
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: window,
@@ -181,6 +186,7 @@ ThemeData _build({
       ),
       labelTextStyle: WidgetStateProperty.resolveWith(
         (s) => TextStyle(
+          fontFamily: font,
           fontSize: 11.5,
           color: s.contains(WidgetState.selected) ? accent : dim,
           fontWeight: s.contains(WidgetState.selected) ? FontWeight.w600 : FontWeight.w400,
@@ -195,7 +201,7 @@ ThemeData _build({
       backgroundColor: base,
       selectedColor: selection,
       showCheckmark: false,
-      labelStyle: TextStyle(color: text, fontSize: 13),
+      labelStyle: TextStyle(fontFamily: font, color: text, fontSize: 13),
       padding: const EdgeInsets.symmetric(horizontal: 2),
     ),
     inputDecorationTheme: InputDecorationTheme(
@@ -252,7 +258,7 @@ ThemeData _build({
       surfaceTintColor: Colors.transparent,
       elevation: 2,
       shape: framed,
-      titleTextStyle: TextStyle(color: text, fontSize: 17, fontWeight: FontWeight.w600),
+      titleTextStyle: TextStyle(fontFamily: font, color: text, fontSize: 17, fontWeight: FontWeight.w600),
     ),
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: base,

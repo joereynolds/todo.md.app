@@ -223,6 +223,18 @@ void main() {
     expect([for (final t in f.tasks) if (flt.matches(t)) t.text], ['Wash', 'Movie']);
     expect(flt.narrows, isTrue);
     expect(flt.searchNarrows, isFalse);
+
+    // done:today / done:week, shown even with the Done toggle off.
+    final g = parse('- [x] a x2026-10-31\n- [x] b x2026-10-26\n- [x] c x2026-10-20\n- [ ] d\n- [x] e\n');
+    List<String> done(String text, {int states = 0x3}) {
+      final flt = TaskFilter()..states = states;
+      flt.setText(text);
+      return [for (final t in g.tasks) if (flt.matches(t)) t.text];
+    }
+    expect(done('done:today'), ['a']);
+    expect(done('done:week'), ['a', 'b']);
+    expect(done(''), ['d']); // done hidden as usual
+    expect(done('done:today OR d'), ['a', 'd']);
   });
 
   test('tags', () {

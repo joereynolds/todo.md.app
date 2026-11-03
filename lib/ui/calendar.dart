@@ -45,7 +45,7 @@ const statTiles = [
   ('next 7 days', 'due:week'),
   ('in progress', 'is:doing'),
   ('quick (≤ 2m)', '~<=2m is:open'),
-  ('done today', ''),
+  ('done today', 'done:today'),
 ];
 
 class CalendarPane extends StatefulWidget {

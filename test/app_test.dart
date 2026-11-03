@@ -11,6 +11,7 @@ import 'package:todomd/core/store.dart';
 import 'package:todomd/core/task.dart';
 import 'package:todomd/main.dart';
 import 'package:todomd/ui/dialogs.dart';
+import 'package:todomd/ui/help_page.dart';
 import 'package:todomd/ui/home.dart';
 import 'package:todomd/ui/settings.dart';
 import 'package:todomd/ui/task_list.dart';
@@ -228,6 +229,17 @@ void main() {
     expect(home.list.rows.map((r) => r.task?.text), [null, 'movie', 'popcorn']); // parent kept
     home.setFilter('');
     await tester.pumpAndSettle();
+    // The help sheet: tapping an example applies it.
+    await tester.tap(find.byTooltip('How to filter'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('help-~<=15m')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('help-~<=15m')));
+    await tester.pumpAndSettle();
+    expect(home.search.text, '~<=15m');
+    expect(home.list.rows.map((r) => r.task?.text), [null, 'wash']);
+    home.setFilter('');
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.byKey(const Key('etaFilter')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('etaFilter')));
@@ -422,6 +434,22 @@ void main() {
     expect((await Settings.load()).views.map((v) => v.name), ['Week']);
   });
 
+  testWidgets('menu → Help explains the app; its filter link opens the filter sheet', (tester) async {
+    final home = await boot(tester);
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Help'));
+    await tester.pumpAndSettle();
+    expect(find.text('Your tasks are in your notes'), findsOneWidget);
+    await tester.scrollUntilVisible(find.byKey(const Key('helpFilter')), 300);
+    await tester.tap(find.byKey(const Key('helpFilter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('help-due:today')));
+    await tester.pumpAndSettle();
+    expect(home.search.text, 'due:today');
+    expect(find.byType(HelpPage), findsNothing); // back on the list
+  });
+
   testWidgets('calendar: day list, tile filters, reveal in Tasks', (tester) async {
     final home = await boot(tester, data: '- [ ] late !2026-10-30\n- [ ] now !2026-10-31\n- [/] doing\n');
     await tester.tap(find.text('Calendar'));
@@ -450,6 +478,17 @@ void main() {
     await tester.pumpAndSettle();
     expect(home.tab, 2);
     expect(home.search.text, '');
+  });
+
+  testWidgets('calendar: "done today" shows what was finished today, Done toggle off or not', (tester) async {
+    final home = await boot(tester, data: '- [x] finished x2026-10-31\n- [x] older x2026-10-20\n- [ ] open\n');
+    await tester.tap(find.text('Calendar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tile-done today')));
+    await tester.pumpAndSettle();
+    expect(home.tab, 0);
+    expect(home.search.text, 'done:today');
+    expect(home.list.rows.map((r) => r.task?.text), [null, 'finished']);
   });
 
   testWidgets('agenda groups by day with relative labels', (tester) async {

@@ -5,6 +5,8 @@
 //   ~<=15m ~<1h ~>2h ~>=1d ~30m ~none ~any            ETA conditions
 //   due:overdue due:today due:week due:none due:any   (week = next 7 days)
 //   is:todo is:doing is:done is:cancelled is:open
+//   done:today done:week   finished today / in the last 7 days; these show
+//                          even when the Done state toggle is off
 //   #tag            has that tag, or one under it (#work matches #work/admin)
 // OR (capitals, on its own) between terms gives alternatives: "a b OR c" is
 // (a and b) or c. A saved view's filter (setView) works the same way and is
@@ -108,8 +110,9 @@ class _Clause {
   final List<_Due> due = [];
   final List<String> tags = []; // lower case, without '#'
   int isMask = 0; // from is: terms, 0 = no constraint
+  int doneWithin = 0; // done:today = 1, done:week = 7 (days, today included); 0 = none
 
-  bool get isEmpty => terms.isEmpty && eta.isEmpty && due.isEmpty && tags.isEmpty && isMask == 0;
+  bool get isEmpty => terms.isEmpty && eta.isEmpty && due.isEmpty && tags.isEmpty && isMask == 0 && doneWithin == 0;
 
   void add(String term) {
     final c = EtaCond.parse(term);
@@ -129,6 +132,10 @@ class _Clause {
         due.add(d);
         return;
       }
+    } else if (lower == 'done:today' || lower == 'done:week') {
+      final days = lower == 'done:today' ? 1 : 7;
+      doneWithin = doneWithin == 0 ? days : (days < doneWithin ? days : doneWithin);
+      return;
     } else if (lower.startsWith('is:')) {
       final bits = _isNames[lower.substring(3)];
       if (bits != null) {
@@ -141,6 +148,10 @@ class _Clause {
 
   bool matches(Task t, Day today) {
     if (isMask != 0 && isMask & stateBit(t.state) == 0) return false;
+    if (doneWithin > 0) {
+      final c = t.completed;
+      if (t.state != TaskState.done || c == null || c > today || c <= today - doneWithin) return false;
+    }
     for (final c in eta) {
       if (!c.holds(t.eta)) return false;
     }
@@ -190,6 +201,15 @@ bool _any(List<_Clause> expr, Task t, Day today) {
   return false;
 }
 
+/// Whether a done: clause matches: asking for finished tasks shows them even
+/// with the Done toggle off.
+bool _anyDone(List<_Clause> expr, Task t, Day today) {
+  for (final c in expr) {
+    if (c.doneWithin > 0 && c.matches(t, today)) return true;
+  }
+  return false;
+}
+
 class TaskFilter {
   List<_Clause> _search = const [];
   List<_Clause> _view = const [];
@@ -204,6 +224,7 @@ class TaskFilter {
   void setText(String text) {
     _text = text;
     _search = _parse(text);
+    _done = _hasDone;
     _today = today();
   }
 
@@ -211,6 +232,7 @@ class TaskFilter {
   void setView(String text) {
     _viewText = text;
     _view = _parse(text);
+    _done = _hasDone;
     _today = today();
   }
 
@@ -230,11 +252,16 @@ class TaskFilter {
 
   bool get showsEverything => states == 0xF && !narrows;
 
+  bool get _hasDone => _search.any((c) => c.doneWithin > 0) || _view.any((c) => c.doneWithin > 0);
+  bool _done = false; // cached _hasDone
+
   bool matches(Task t) {
-    if (states & stateBit(t.state) == 0) return false;
+    final visible = states & stateBit(t.state) != 0;
+    if (!visible && !_done) return false;
     for (final c in _presetConds) {
       if (!c.holds(t.eta)) return false;
     }
-    return _any(_view, t, _today) && _any(_search, t, _today);
+    if (!_any(_view, t, _today) || !_any(_search, t, _today)) return false;
+    return visible || _anyDone(_search, t, _today) || _anyDone(_view, t, _today);
   }
 }

@@ -12,11 +12,12 @@ app's own folder). Linux desktop is enabled for development only.
 ## Build / run / test
 
 ```sh
-flutter test                          # core, store/models, widget tests (43)
+flutter test                          # core, store/models, widget tests (45)
 flutter analyze
 flutter test benchmark/               # 200k tasks / 5,000 files, JIT timings
 BENCH_DIR=~/notes flutter test benchmark/
 flutter test screenshots/ --update-goldens   # PNGs in screenshots/out (real fonts from the SDK cache)
+python3 tool/readme_shots.py           # then: README images (readme-*.png, Midnight) at 40% into docs/screenshots
 flutter build apk --release --split-per-abi
 make install-android                  # build + adb install the APK for the plugged-in phone's ABI
 ```
@@ -54,6 +55,7 @@ search box is debounced 150 ms.
 | `lib/ui/task_sheet.dart`, `dialogs.dart`, `add_task.dart`, `tags.dart` | Task sheet; due, ETA, replace, prompts; add-task sheet, `DueRow`, `Pick`; tag pills, tag list, suggestions, picker. |
 | `lib/ui/theme.dart`, `settings.dart`, `settings_page.dart` | Light/Soft/Dark/System and the desktop's Clean/Midnight/Paper (same tokens; accent colours in-progress; Midnight's pill tabs = nav-bar pill; Paper's card = `TaskColors.card`, `_card` in home; no roomier rows, they stay 48 px) + `TaskColors`; SharedPreferences (same keys as the desktop QSettings, plus `SavedView`s); folders page. |
 | `lib/ui/views.dart` | Views sheet (switch) and view editor. |
+| `lib/ui/help_page.dart`, `filter_help.dart` | ⋮ → Help (how the app works, plain words; keep it in step with features), and the search box's ? sheet (examples tap to apply). |
 | `lib/ui/platform.dart` + `MainActivity.kt` | Storage access over the `todomd/storage` channel, folder picker, open file. |
 
 ## Differences from the desktop (deliberate)
@@ -142,6 +144,13 @@ ancestors (`actions.bulletList`). Clears the selection.
   the calendar day list), ANDed with the search box, so search narrows within it.
   Picking a view from the Calendar tab switches to Tasks. Note `is:done` in a view
   still needs the Done state toggle on, as with the search box.
+
+## done: filter terms (added here first: port to the desktop)
+
+`done:today` / `done:week` match done tasks whose `x` date is today / in the last 7
+days (today included). Tasks they match show **even with the Done state toggle off**
+(asking for finished tasks implies it); everything else still follows the toggles.
+The calendar's "done today" tile uses `done:today` (it used to do nothing).
 
 ## Not done yet
 

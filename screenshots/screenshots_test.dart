@@ -47,13 +47,17 @@ Future<void> loadFonts() async {
   Future<void> load(String family, List<String> files) async {
     final loader = FontLoader(family);
     for (final f in files) {
-      final bytes = File('$cache/$f').readAsBytesSync();
+      final bytes = File(f.startsWith('/') ? f : '$cache/$f').readAsBytesSync();
       loader.addFont(Future.value(ByteData.sublistView(bytes)));
     }
     await loader.load();
   }
 
-  await load('Roboto', ['Roboto-Regular.ttf', 'Roboto-Medium.ttf', 'Roboto-Bold.ttf', 'Roboto-Italic.ttf']);
+  const roboto = ['Roboto-Regular.ttf', 'Roboto-Medium.ttf', 'Roboto-Bold.ttf', 'Roboto-Italic.ttf'];
+  await load('Roboto', roboto);
+  // Android's "monospace" (task syntax in the help sheets), if installed here.
+  const mono = '/usr/share/fonts/droid/DroidSansMono.ttf';
+  if (File(mono).existsSync()) await load('monospace', [mono]);
   await load('MaterialIcons', ['MaterialIcons-Regular.otf']);
 }
 
@@ -159,5 +163,43 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300)); // the fade-in
     await shot('status-light');
     await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('filter help', (tester) async {
+    await boot(tester, 'light');
+    await tester.tap(find.byTooltip('How to filter'));
+    await tester.pumpAndSettle();
+    await shot('filter-help-light');
+  });
+
+  testWidgets('help', (tester) async {
+    await boot(tester, 'light');
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Help'));
+    await tester.pumpAndSettle();
+    await shot('help-light');
+  });
+
+  // For the README (resized into docs/screenshots by tool/readme_shots.py).
+  group('readme', () {
+    testWidgets('tasks', (tester) async {
+      await boot(tester, 'midnight');
+      await shot('readme-tasks');
+    });
+    testWidgets('agenda', (tester) async {
+      await boot(tester, 'midnight', tab: 1);
+      await shot('readme-agenda');
+    });
+    testWidgets('task', (tester) async {
+      await boot(tester, 'midnight');
+      await tester.tap(find.text('Sort the kitchen'));
+      await tester.pumpAndSettle();
+      await shot('readme-task');
+    });
+    testWidgets('calendar', (tester) async {
+      await boot(tester, 'midnight', tab: 2);
+      await shot('readme-calendar');
+    });
   });
 }

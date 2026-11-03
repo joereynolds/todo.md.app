@@ -16,6 +16,8 @@ import '../core/task.dart';
 import 'calendar.dart';
 import 'add_task.dart';
 import 'dialogs.dart';
+import 'filter_help.dart';
+import 'help_page.dart';
 import 'platform.dart';
 import 'settings.dart';
 import 'settings_page.dart';
@@ -608,6 +610,20 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
+  void _openHelp() {
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (page) => HelpPage(
+          onFilterHelp: () {
+            Navigator.pop(page); // back to the list, where an example applies
+            _help();
+          },
+        ),
+      ),
+    );
+  }
+
   Future<void> _openSettings() async {
     await Navigator.push(
       context,
@@ -690,6 +706,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 _selectAll();
               case 'settings':
                 _openSettings();
+              case 'help':
+                _openHelp();
             }
           },
           itemBuilder: (_) => [
@@ -701,6 +719,7 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
             const PopupMenuItem(value: 'reload', child: Text('Reload')),
             const PopupMenuDivider(),
             const PopupMenuItem(value: 'settings', child: Text('Folders & theme')),
+            const PopupMenuItem(value: 'help', child: Text('Help')),
           ],
         ),
       ],
@@ -763,13 +782,13 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
               textInputAction: TextInputAction.search,
               autocorrect: false,
               decoration: InputDecoration(
-                hintText: 'Filter: words, #tag, due:today, ~<=15m …',
+                hintText: 'Search tasks, or tap ? for #tags, dates …',
                 prefixIcon: const Icon(Icons.search, size: 20),
                 suffixIcon: ListenableBuilder(
                   listenable: search,
                   builder: (_, _) => search.text.isEmpty
                       ? IconButton(
-                          tooltip: 'Filter syntax',
+                          tooltip: 'How to filter',
                           icon: const Icon(Icons.help_outline, size: 20),
                           onPressed: _help,
                         )
@@ -841,23 +860,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  void _help() {
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Filter'),
-        content: const SelectableText(
-          'Space separated terms, all must match.\n\n'
-          'Words match the task text or file path.\n'
-          'OR between terms: any of them  (#music OR #video).\n\n'
-          'Tags:  #office  (#work also matches #work/admin)\n'
-          'ETA:  ~<=15m  ~<1h  ~>2h  ~>=1d  ~30m  ~none  ~any\n'
-          'Due:  due:overdue  due:today  due:week  due:none  due:any\n'
-          'State:  is:todo  is:doing  is:done  is:cancelled  is:open',
-        ),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
-      ),
-    );
+  Future<void> _help() async {
+    final term = await showFilterHelp(context);
+    if (term != null && mounted) setFilter(term);
   }
 
   /// Paper: the content sits in a rounded, bordered card on the window colour.
