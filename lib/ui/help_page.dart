@@ -16,7 +16,7 @@ const _sections = <(IconData, String, List<String>)>[
           '`[x]` done,  `[-]` cancelled.',
       'Indent a task under another to make it a subtask. A parent shows how many of its subtasks are done, e.g. `2/4`.',
       'Edit your notes in any app (Obsidian, Markor, a sync tool …). Changes show up here when you come back, '
-          'or pull the list down to refresh.',
+          'or straight away while the app is open. ⋮ → Reload reads everything again.',
     ],
   ),
   (
@@ -64,7 +64,8 @@ const _sections = <(IconData, String, List<String>)>[
     Icons.search,
     'Searching and filtering',
     [
-      'Type in the search box to show only matching tasks. Several words must all match.',
+      'Type in the search box to show only matching tasks. Several words must all match. A task that matches '
+          'brings its subtasks along, and its parents stay for context.',
       'Special terms filter by tag, due date, estimate or state, e.g. `#home`,  `due:today`,  `~<=15m`,  `is:doing`,  '
           '`done:today`. '
           'Put `OR` between terms for "any of these". The full list, with examples you can tap to try, is under '

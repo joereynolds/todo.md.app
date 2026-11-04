@@ -221,8 +221,9 @@ class _ViewSwiperState extends State<ViewSwiper> with SingleTickerProviderStateM
 /// A horizontal drag that wins at the usual slop, but only while the finger
 /// has gone further across than up or down. The list's vertical scroll uses
 /// the same slop, so whichever direction the finger mostly goes wins: a
-/// sideways swipe with some drift isn't taken for a scroll (or a pull to
-/// refresh), and a scroll with some drift isn't taken for a swipe.
+/// sideways swipe with some drift isn't taken for a scroll, and a scroll with
+/// some drift isn't taken for a swipe. (There's no pull-to-refresh to catch
+/// a swipe that starts slightly downward at the top.)
 class _SwipeRecognizer extends HorizontalDragGestureRecognizer {
   _SwipeRecognizer({super.debugOwner});
 

@@ -185,6 +185,48 @@ void main() {
     s.dispose();
   });
 
+  test('list model: subtasks of a matching task show (their state still filtered)', () async {
+    write(
+      't.md',
+      '- [ ] Get building insurance #house\n'
+          '  - [ ] get quotes\n'
+          '    - [ ] ring brokers\n'
+          '  - [x] find policy number\n'
+          '  - [ ] pay #money\n'
+          '- [ ] other\n'
+          '  - [ ] sub\n',
+    );
+    final s = TaskStore();
+    s.watching = false;
+    await s.setRoots([tmp.path]);
+    final m = TaskListModel(s);
+    m.filter.states = 0x3; // done hidden
+    List<String?> shown() => [for (final r in m.rows) r.task?.text];
+
+    m.filter.setView('#house');
+    m.refilter();
+    expect(shown(), [null, 'Get building insurance', 'get quotes', 'ring brokers', 'pay']);
+    expect(m.rows[1].hasChildren, isTrue);
+    // The search box narrows within the view (finding untagged subtasks); a
+    // match still brings its subtasks.
+    m.filter.setText('quotes');
+    m.refilter();
+    expect(shown(), [null, 'Get building insurance', 'get quotes', 'ring brokers']);
+    // A match deeper down keeps its ancestors but not their other subtasks.
+    m.filter.setView('');
+    m.filter.setText('#money');
+    m.refilter();
+    expect(shown(), [null, 'Get building insurance', 'pay']);
+    // Done ones show once the Done toggle is on.
+    m.filter.setText('');
+    m.filter.setView('#house');
+    m.filter.states = 0xF;
+    m.refilter();
+    expect(shown(), contains('find policy number'));
+    m.dispose();
+    s.dispose();
+  });
+
   test('agenda: days, nesting under same-day ancestor, empty days, labels', () async {
     write(
       't.md',

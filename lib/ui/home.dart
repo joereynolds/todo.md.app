@@ -325,13 +325,21 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   int _countMatching(String filter) {
+    // As the list shows it: a task is in the view if it or an ancestor matches.
     final f = TaskFilter()
       ..states = list.filter.states
-      ..setText(filter);
+      ..setView(filter);
+    bool ancestorIn(Task t) {
+      for (var a = t.parent; a != null; a = a.parent) {
+        if (f.viewMatches(a)) return true;
+      }
+      return false;
+    }
+
     var n = 0;
     for (final file in store.files) {
       for (final t in file.tasks) {
-        if (f.matches(t)) n++;
+        if (f.matches(t, inView: ancestorIn(t))) n++;
       }
     }
     return n;
@@ -983,7 +991,6 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           onTapTask: _openTask,
           onToggle: toggleTask,
           onTag: filterTag,
-          onRefresh: store.refresh,
           empty: store.loading ? const SizedBox() : empty('No tasks yet. Tap + to add one.'),
         );
       case 1:
@@ -997,7 +1004,6 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           onTapTask: _openTask,
           onToggle: toggleTask,
           onTag: filterTag,
-          onRefresh: store.refresh,
           empty: store.loading ? const SizedBox() : empty('Nothing due. Tasks with !YYYY-MM-DD show here.'),
         );
       default:

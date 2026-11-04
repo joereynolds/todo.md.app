@@ -12,7 +12,7 @@ app's own folder). Linux desktop is enabled for development only.
 ## Build / run / test
 
 ```sh
-flutter test                          # core, store/models, widget tests (50)
+flutter test                          # core, store/models, widget tests (51)
 flutter analyze
 flutter test benchmark/               # 200k tasks / 5,000 files, JIT timings
 BENCH_DIR=~/notes flutter test benchmark/
@@ -70,7 +70,8 @@ search box is debounced 150 ms.
 - **Watching**: Dart can't watch recursively on Linux/Android, so each directory
   gets its own watch (max 4000), as on the desktop. Watches are dropped when the
   app is paused and `refresh()` (mtime/size diff, isolate scan) catches up on
-  resume. Pull-to-refresh calls it too.
+  resume. **No pull-to-refresh** (the user removed it: horizontal view swipes kept
+  catching on it); ⋮ → Reload reloads everything.
 - **Isolates**: `Isolate.run` closures live in top-level helpers so they capture
   only their arguments (a closure shares its context with siblings, which could
   drag the store along and fail to send).
@@ -142,7 +143,7 @@ ancestors (`actions.bulletList`). Clears the selection.
   SharedPreferences as JSON (`views/list`, active one in `views/current`). They're
   tabs along the top of Tasks/Agenda (`ViewStrip`, under the search box: All, each view, +; shown once a
   view exists, else ⋮ → New view…). Tap = switch, tap the active one or long-press =
-  edit; swiping the list left/right steps through them (`ViewSwiper`: one model; its recognizer wins at the normal slop only while the drag is more across than down, so neither a swipe nor a scroll is mistaken for the other (or for pull-to-refresh). Note a drag recognizer's onCancel also fires for every gesture it *lost*: the swiper ignores it unless dragging, else each scroll replayed the last swipe's offset;
+  edit; swiping the list left/right steps through them (`ViewSwiper`: one model; its recognizer wins at the normal slop only while the drag is more across than down, so neither a swipe nor a scroll is mistaken for the other. Note a drag recognizer's onCancel also fires for every gesture it *lost*: the swiper ignores it unless dragging, else each scroll replayed the last swipe's offset;
   the content follows the finger and the next slides in; off while selecting).
   New view is prefilled with the search box if it has text (that search is then
   cleared). **Adding in a view**: + starts the task with the tags of the view's
@@ -151,6 +152,11 @@ ancestors (`actions.bulletList`). Clears the selection.
   line says so. The editor has quick terms (due:week, due:overdue …) and tag pills
   that toggle a term in or out (a tag after a tag is joined with OR), and a live
   count of matching tasks (state toggles apply).
+- **Subtasks come along**: a task under a task that matches shows too (its state
+  toggle still applies; `_appendTask`'s `under`, ported to the desktop). And a view
+  holds for every task under one it matches (`inView`, `TaskFilter.matches(inView:)`,
+  also the editor's count), so a `#house` view lists the untagged subtasks of a
+  `#house` task and the search box can find them within it.
 - The active view's filter goes in `TaskFilter.setView` for **Tasks and Agenda** (not
   the calendar day list), ANDed with the search box, so search narrows within it.
   Picking a view from the Calendar tab switches to Tasks. Note `is:done` in a view

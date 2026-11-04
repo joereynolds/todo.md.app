@@ -40,7 +40,6 @@ class TaskListView extends StatefulWidget {
     required this.onTapTask,
     required this.onToggle,
     this.onHeaderLongPress,
-    this.onRefresh,
     this.controller,
     this.allowSelection = true,
     this.empty,
@@ -58,7 +57,6 @@ class TaskListView extends StatefulWidget {
   final ValueChanged<Task> onToggle;
   final ValueChanged<String>? onTag; // tapping a tag
   final ValueChanged<int>? onHeaderLongPress; // row index
-  final Future<void> Function()? onRefresh;
   final ScrollController? controller;
   final bool allowSelection;
   final Widget? empty;
@@ -226,7 +224,7 @@ class _TaskListViewState extends State<TaskListView> {
               child: SizedBox(height: c.maxHeight, child: widget.empty),
             ),
           );
-          return widget.onRefresh == null ? child : RefreshIndicator(onRefresh: widget.onRefresh!, child: child);
+          return child;
         }
         Widget list = CustomScrollView(
           key: _listKey,
@@ -247,7 +245,6 @@ class _TaskListViewState extends State<TaskListView> {
           onLongPressCancel: _onLongPressEnd,
           child: list,
         );
-        if (widget.onRefresh != null) list = RefreshIndicator(onRefresh: widget.onRefresh!, child: list);
         return list;
       },
     );

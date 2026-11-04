@@ -255,13 +255,18 @@ class TaskFilter {
   bool get _hasDone => _search.any((c) => c.doneWithin > 0) || _view.any((c) => c.doneWithin > 0);
   bool _done = false; // cached _hasDone
 
-  bool matches(Task t) {
+  /// The view's filter alone holds for [t] (true when there's no view).
+  bool viewMatches(Task t) => _any(_view, t, _today);
+
+  /// [inView]: an ancestor matches the view, so [t] is in it too (a #house
+  /// task's subtasks belong to the #house view without the tag).
+  bool matches(Task t, {bool inView = false}) {
     final visible = states & stateBit(t.state) != 0;
     if (!visible && !_done) return false;
     for (final c in _presetConds) {
       if (!c.holds(t.eta)) return false;
     }
-    if (!_any(_view, t, _today) || !_any(_search, t, _today)) return false;
+    if ((!inView && !_any(_view, t, _today)) || !_any(_search, t, _today)) return false;
     return visible || _anyDone(_search, t, _today) || _anyDone(_view, t, _today);
   }
 }

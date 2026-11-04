@@ -249,6 +249,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(contents(), initial);
     expect(find.byKey(const ValueKey('due-Tomorrow')), findsNothing); // no due picker
+    // And no pull-to-refresh: dragging down at the top does nothing.
+    final g = await tester.startGesture(tester.getCenter(rowText('a')));
+    for (var i = 0; i < 10; i++) {
+      await g.moveBy(const Offset(0, 25));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(find.byType(RefreshProgressIndicator), findsNothing);
+    await g.up();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('search box, and the filter sheet\'s states and ETA preset, narrow the list', (tester) async {
@@ -501,7 +510,7 @@ void main() {
     await g.up();
     await tester.pumpAndSettle();
     expect(home.view?.name, 'Media');
-    // A sideways swipe that drifts down a little is still a swipe, not a pull to refresh.
+    // A sideways swipe that drifts down a little is still a swipe.
     await tester.timedDrag(rowText('song'), const Offset(-300, 60), const Duration(milliseconds: 900));
     await tester.pumpAndSettle();
     expect(home.view?.name, 'Week');

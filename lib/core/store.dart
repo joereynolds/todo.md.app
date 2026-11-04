@@ -287,7 +287,7 @@ class TaskStore extends ChangeNotifier {
   Future<void> reload() => setRoots(_roots);
 
   /// Incremental: re-reads only files whose mtime or size changed, picks up
-  /// new and removed files. Used on app resume and pull-to-refresh.
+  /// new and removed files. Used on app resume.
   Future<void> refresh() async {
     if (_loading || _roots.isEmpty) return;
     final gen = _generation;

@@ -127,8 +127,21 @@ abstract class FlatModel extends ChangeNotifier {
 
   // Appends t and its visible descendants (unless `hidden`, under a collapsed
   // node, where only visibility is computed). Returns whether t is visible:
-  // it matches or has a visible descendant.
-  bool _appendTask(Task t, int g, int depth, bool hidden, List<ListRow> out) {
+  // it matches, sits under a task that matches (`under`; its state must still
+  // be shown), or has a visible descendant. So a view of #house shows the
+  // subtasks of a #house task even though they don't carry the tag.
+  //
+  // `inView`: an ancestor matches the view's filter, which then holds for t
+  // too, so the search box can find untagged subtasks within a #house view.
+  bool _appendTask(
+    Task t,
+    int g,
+    int depth,
+    bool hidden,
+    List<ListRow> out, [
+    bool under = false,
+    bool inView = false,
+  ]) {
     if (_all) {
       if (hidden) return true;
       final kids = t.children.isNotEmpty;
@@ -144,11 +157,13 @@ abstract class FlatModel extends ChangeNotifier {
     final mark = out.length;
     if (!hidden) out.add(ListRow(t, g, depth, false, true));
     final open = t.children.isEmpty || !_isCollapsed(taskKey(t));
+    final viewed = inView || filter.viewMatches(t);
+    final shown = (under && filter.stateVisible(t.state)) || filter.matches(t, inView: viewed);
     var anyChild = false;
     for (final c in t.children) {
-      anyChild |= _appendTask(c, g, depth + 1, hidden || !open, out);
+      anyChild |= _appendTask(c, g, depth + 1, hidden || !open, out, shown, viewed);
     }
-    if (!anyChild && !filter.matches(t)) {
+    if (!anyChild && !shown) {
       if (!hidden) out.length = mark;
       return false;
     }
