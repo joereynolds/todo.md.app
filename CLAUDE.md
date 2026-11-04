@@ -12,7 +12,7 @@ app's own folder). Linux desktop is enabled for development only.
 ## Build / run / test
 
 ```sh
-flutter test                          # core, store/models, widget tests (51)
+flutter test                          # core, store/models, widget tests (52)
 flutter analyze
 flutter test benchmark/               # 200k tasks / 5,000 files, JIT timings
 BENCH_DIR=~/notes flutter test benchmark/
@@ -159,7 +159,9 @@ ancestors (`actions.bulletList`). Clears the selection.
   `#house` task and the search box can find them within it.
 - The active view's filter goes in `TaskFilter.setView` for **Tasks and Agenda** (not
   the calendar day list), ANDed with the search box, so search narrows within it.
-  Picking a view from the Calendar tab switches to Tasks. Note `is:done` in a view
+  Picking a view from the Calendar tab switches to Tasks. The other way round, a
+  filter started from the calendar (a stat tile, or a tag in its day list) switches
+  to **All** first: the calendar ignores views, so it shouldn't land inside one. Note `is:done` in a view
   still needs the Done state toggle on, as with the search box.
 
 ## done: filter terms (added here first: port to the desktop)

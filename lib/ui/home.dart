@@ -270,6 +270,8 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
   /// the calendar). Tapping the tag that's already the filter clears it.
   void filterTag(String tag) {
     final term = tagTerm(tag);
+    // From the calendar (which ignores views), show the tag across All tasks.
+    if (tab == 2 && view != null) setView(null);
     setFilter(search.text.trim().toLowerCase() == term ? '' : term);
     if (tab == 2) _setTab(0);
   }
@@ -1012,6 +1014,9 @@ class HomePageState extends State<HomePage> with WidgetsBindingObserver {
           dayModel: day,
           filterText: search.text,
           onFilter: (f) {
+            // The tiles count everything, so their filter goes to All tasks,
+            // not into whichever view was active.
+            if (f.isNotEmpty && view != null) setView(null);
             setFilter(f);
             if (f.isNotEmpty) _setTab(0);
           },

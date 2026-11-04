@@ -748,6 +748,47 @@ void main() {
     expect(home.search.text, '');
   });
 
+  testWidgets('calendar filters apply to all tasks, not the view you came from', (tester) async {
+    final home = await boot(tester, data: '- [ ] crash #bug\n- [ ] late !2026-10-30\n- [ ] now !2026-10-31 #home\n');
+    List<String?> shown() => [
+      for (final r in home.list.rows)
+        if (r.task != null) r.task!.text,
+    ];
+    home.views = const [SavedView('Bugs', '#bug')];
+    home.setView(home.views.first);
+    await tester.pumpAndSettle();
+    expect(shown(), ['crash']);
+
+    // A tile (counted over everything) shows everything it counted.
+    await tester.tap(find.text('Calendar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tile-overdue')));
+    await tester.pumpAndSettle();
+    expect(home.tab, 0);
+    expect(home.view, isNull);
+    expect(home.search.text, 'due:overdue');
+    expect(shown(), ['late']);
+
+    // Same for a tag tapped in the calendar's day list.
+    home.setFilter('');
+    home.setView(home.views.first);
+    await tester.tap(find.text('Calendar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tag-home')));
+    await tester.pumpAndSettle();
+    expect(home.tab, 0);
+    expect(home.view, isNull);
+    expect(shown(), ['now']);
+
+    // From Tasks itself, a tag still narrows within the view.
+    home.setFilter('');
+    home.setView(home.views.first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tag-bug')));
+    await tester.pumpAndSettle();
+    expect(home.view?.name, 'Bugs');
+  });
+
   testWidgets('calendar: "done today" shows what was finished today, Done toggle off or not', (tester) async {
     final home = await boot(tester, data: '- [x] finished x2026-10-31\n- [x] older x2026-10-20\n- [ ] open\n');
     await tester.tap(find.text('Calendar'));
